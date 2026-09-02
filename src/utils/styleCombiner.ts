@@ -326,3 +326,56 @@ export function recordCombinationEvent(
 
   return updatedCombinations;
 }
+
+/**
+ * Delete a specific combination pair record
+ */
+export function deleteCombinationPair(
+  pairKey: string,
+  currentCombinations: StylePairCombination[] = []
+): StylePairCombination[] {
+  const safeCombinations = Array.isArray(currentCombinations) ? [...currentCombinations] : [];
+  const updatedCombinations = safeCombinations.filter((c) => c && c.pairKey !== pairKey);
+
+  try {
+    localStorage.setItem(COMBOS_STORAGE_KEY, JSON.stringify(updatedCombinations));
+  } catch (e) {
+    console.error('Failed to persist updated combination records after deletion', e);
+  }
+
+  return updatedCombinations;
+}
+
+/**
+ * Clear all combination records from storage
+ */
+export function clearAllCombinations(): StylePairCombination[] {
+  try {
+    localStorage.removeItem(COMBOS_STORAGE_KEY);
+  } catch (e) {
+    console.error('Failed to clear combination records', e);
+  }
+  return [];
+}
+
+/**
+ * Reset combine count for a single style preset
+ */
+export function resetStyleCombineCount(
+  presetId: string,
+  presets: StylePreset[]
+): StylePreset[] {
+  return presets.map((p) => {
+    if (p.id === presetId) {
+      return { ...p, combineCount: 0 };
+    }
+    return p;
+  });
+}
+
+/**
+ * Reset combine count for all presets
+ */
+export function resetAllCombineCounts(presets: StylePreset[]): StylePreset[] {
+  return presets.map((p) => ({ ...p, combineCount: 0 }));
+}

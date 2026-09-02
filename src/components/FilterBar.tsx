@@ -1,4 +1,5 @@
-import { Search, X, Star, SlidersHorizontal, Image, Filter, ArrowUpDown, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Search, X, Star, SlidersHorizontal, Image, Filter, ArrowUpDown, Zap, Trash2 } from 'lucide-react';
 import { SortOption } from '../types';
 
 interface FilterBarProps {
@@ -21,6 +22,7 @@ interface FilterBarProps {
   totalCount: number;
   filteredCount: number;
   onResetFilters: () => void;
+  onDeleteFilteredCombined?: () => void;
 }
 
 export function FilterBar({
@@ -43,7 +45,10 @@ export function FilterBar({
   totalCount,
   filteredCount,
   onResetFilters,
+  onDeleteFilteredCombined,
 }: FilterBarProps) {
+  const [confirmPurge, setConfirmPurge] = useState(false);
+
   const hasActiveFilters =
     Boolean(search) ||
     onlyFavorites ||
@@ -196,17 +201,51 @@ export function FilterBar({
           )}
 
           {combinedOnly && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-500/30 text-[10px] font-medium">
-              Fusions Only
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-500/30 text-[10px] font-medium">
+              <span>Fusions Only ({filteredCount})</span>
               {onToggleCombinedOnly && (
                 <button
                   onClick={onToggleCombinedOnly}
                   className="hover:text-white ml-0.5"
+                  title="Clear filter"
                 >
                   <X className="w-3 h-3" />
                 </button>
               )}
             </span>
+          )}
+
+          {combinedOnly && filteredCount > 0 && onDeleteFilteredCombined && (
+            confirmPurge ? (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-800/80 text-[10px]">
+                <span className="text-rose-300 font-medium">Delete all {filteredCount} fusions?</span>
+                <button
+                  onClick={() => {
+                    onDeleteFilteredCombined();
+                    setConfirmPurge(false);
+                  }}
+                  className="px-1.5 py-0.2 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setConfirmPurge(false)}
+                  className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                id="delete-filtered-fusions-btn"
+                onClick={() => setConfirmPurge(true)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/40 hover:bg-rose-950/70 border border-rose-800/40 text-rose-300 hover:text-rose-200 text-[10px] font-medium transition-colors"
+                title="Delete all filtered fusion presets from library"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Delete Filtered Fusions</span>
+              </button>
+            )
           )}
 
           {search && (

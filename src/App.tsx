@@ -23,7 +23,14 @@ import { ToastContainer } from './components/Toast';
 import { getInitialPresets } from './data/sampleStyles';
 import { exportToStrictCSV, exportToExtendedCSV, downloadCSV } from './utils/csv';
 import { enrichPreset } from './utils/tagExtractor';
-import { loadCombinations, recordCombinationEvent } from './utils/styleCombiner';
+import {
+  loadCombinations,
+  recordCombinationEvent,
+  deleteCombinationPair,
+  clearAllCombinations,
+  resetStyleCombineCount,
+  resetAllCombineCounts,
+} from './utils/styleCombiner';
 
 const STORAGE_KEY = 'prompt_styles_studio_presets_v1';
 const VIEW_MODE_KEY = 'prompt_styles_view_mode';
@@ -241,6 +248,43 @@ export default function App() {
     const enriched = enrichPreset(newPreset);
     setPresets((prev) => [enriched, ...prev]);
     showToast('Fusion Preset Saved!', `Added "${enriched.name}" to styles library`, 'success');
+  };
+
+  const handleDeleteCombinationPair = (pairKey: string) => {
+    const updated = deleteCombinationPair(pairKey, combinations);
+    setCombinations(updated);
+    showToast('Synergy Record Removed', 'Deleted combination mix record', 'info');
+  };
+
+  const handleClearAllCombinations = () => {
+    const cleared = clearAllCombinations();
+    setCombinations(cleared);
+    showToast('Mix History Cleared', 'All synergy records removed', 'info');
+  };
+
+  const handleDeleteAllSavedFusions = () => {
+    const count = presets.filter((p) => p.isCombined).length;
+    setPresets((prev) => prev.filter((p) => !p.isCombined));
+    showToast('Fusions Deleted', `Removed ${count} combined presets from library`, 'info');
+  };
+
+  const handleResetStyleCombineCount = (presetId: string) => {
+    const target = presets.find((p) => p.id === presetId);
+    setPresets((prev) => resetStyleCombineCount(presetId, prev));
+    showToast('Count Reset', `Reset count for "${target?.name || 'style'}"`, 'info');
+  };
+
+  const handleResetAllCombineCounts = () => {
+    setPresets((prev) => resetAllCombineCounts(prev));
+    showToast('Counters Reset', 'Reset all style fusion counts to zero', 'info');
+  };
+
+  const handleDeleteFilteredCombined = () => {
+    const toDeleteIds = new Set(
+      filteredAndSortedPresets.filter((p) => p.isCombined).map((p) => p.id)
+    );
+    setPresets((prev) => prev.filter((p) => !toDeleteIds.has(p.id)));
+    showToast('Filtered Fusions Deleted', `Removed ${toDeleteIds.size} fusion presets`, 'info');
   };
 
   // --- CRUD Handlers ---
@@ -536,6 +580,7 @@ export default function App() {
           totalCount={presets.length}
           filteredCount={filteredAndSortedPresets.length}
           onResetFilters={handleResetFilters}
+          onDeleteFilteredCombined={handleDeleteFilteredCombined}
         />
 
         {/* Layout Grid: Main Content + Optional Side Leaderboard */}
@@ -590,6 +635,12 @@ export default function App() {
                 onSelectArtist={(artist) => setSelectedArtist(artist)}
                 onSelectTag={(tag) => setSelectedTag(tag)}
                 onOpenCombiner={(a, b) => handleOpenCombiner(a, b)}
+                onDeleteCombination={handleDeleteCombinationPair}
+                onClearAllCombinations={handleClearAllCombinations}
+                onDeletePreset={handleDeletePreset}
+                onDeleteAllSavedFusions={handleDeleteAllSavedFusions}
+                onResetStyleCombineCount={handleResetStyleCombineCount}
+                onResetAllCombineCounts={handleResetAllCombineCounts}
                 onClose={() => setShowLeaderboard(false)}
               />
             </aside>

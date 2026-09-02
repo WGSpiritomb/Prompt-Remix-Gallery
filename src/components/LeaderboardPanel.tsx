@@ -12,6 +12,9 @@ import {
   ArrowRight,
   GitMerge,
   Zap,
+  Trash2,
+  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react';
 import { StylePreset, ExtractedTag, StylePairCombination } from '../types';
 import { computeLeaderboards } from '../utils/tagExtractor';
@@ -25,6 +28,12 @@ interface LeaderboardPanelProps {
   onSelectArtist: (artist: string | null) => void;
   onSelectTag: (tag: string | null) => void;
   onOpenCombiner?: (styleA?: StylePreset, styleB?: StylePreset) => void;
+  onDeleteCombination?: (pairKey: string) => void;
+  onClearAllCombinations?: () => void;
+  onDeletePreset?: (presetId: string) => void;
+  onDeleteAllSavedFusions?: () => void;
+  onResetStyleCombineCount?: (presetId: string) => void;
+  onResetAllCombineCounts?: () => void;
   onClose?: () => void;
 }
 
@@ -36,11 +45,20 @@ export function LeaderboardPanel({
   onSelectArtist,
   onSelectTag,
   onOpenCombiner,
+  onDeleteCombination,
+  onClearAllCombinations,
+  onDeletePreset,
+  onDeleteAllSavedFusions,
+  onResetStyleCombineCount,
+  onResetAllCombineCounts,
   onClose,
 }: LeaderboardPanelProps) {
   const [activeTab, setActiveTab] = useState<'artists' | 'tags' | 'combos'>('combos');
   const [tagCategoryFilter, setTagCategoryFilter] = useState<string>('all');
   const [comboSubTab, setComboSubTab] = useState<'pairs' | 'styles' | 'fusions'>('pairs');
+  const [confirmClearCombos, setConfirmClearCombos] = useState(false);
+  const [confirmDeleteFusions, setConfirmDeleteFusions] = useState(false);
+  const [confirmResetCounts, setConfirmResetCounts] = useState(false);
 
   const { topArtists, topTags, totalTokensCount } = computeLeaderboards(presets);
 
@@ -242,40 +260,166 @@ export function LeaderboardPanel({
 
       {/* Sub-Filters for Combos tab */}
       {activeTab === 'combos' && (
-        <div className="flex items-center gap-1 bg-[#0f1117] p-1 rounded-lg border border-slate-800/80 mb-2 text-[10px]">
-          <button
-            id="combos-subtab-pairs"
-            onClick={() => setComboSubTab('pairs')}
-            className={`flex-1 py-1 px-2 rounded font-semibold text-center transition-all ${
-              comboSubTab === 'pairs'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Top Synergies ({combinations.length})
-          </button>
-          <button
-            id="combos-subtab-styles"
-            onClick={() => setComboSubTab('styles')}
-            className={`flex-1 py-1 px-2 rounded font-semibold text-center transition-all ${
-              comboSubTab === 'styles'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Most Combined ({combinedStylesRanked.length})
-          </button>
-          <button
-            id="combos-subtab-fusions"
-            onClick={() => setComboSubTab('fusions')}
-            className={`flex-1 py-1 px-2 rounded font-semibold text-center transition-all ${
-              comboSubTab === 'fusions'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Saved ({savedFusions.length})
-          </button>
+        <div className="space-y-1.5 mb-2">
+          <div className="flex items-center gap-1 bg-[#0f1117] p-1 rounded-lg border border-slate-800/80 text-[10px]">
+            <button
+              id="combos-subtab-pairs"
+              onClick={() => {
+                setComboSubTab('pairs');
+                setConfirmClearCombos(false);
+                setConfirmDeleteFusions(false);
+                setConfirmResetCounts(false);
+              }}
+              className={`flex-1 py-1 px-2 rounded font-semibold text-center transition-all ${
+                comboSubTab === 'pairs'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Top Synergies ({combinations.length})
+            </button>
+            <button
+              id="combos-subtab-styles"
+              onClick={() => {
+                setComboSubTab('styles');
+                setConfirmClearCombos(false);
+                setConfirmDeleteFusions(false);
+                setConfirmResetCounts(false);
+              }}
+              className={`flex-1 py-1 px-2 rounded font-semibold text-center transition-all ${
+                comboSubTab === 'styles'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Most Combined ({combinedStylesRanked.length})
+            </button>
+            <button
+              id="combos-subtab-fusions"
+              onClick={() => {
+                setComboSubTab('fusions');
+                setConfirmClearCombos(false);
+                setConfirmDeleteFusions(false);
+                setConfirmResetCounts(false);
+              }}
+              className={`flex-1 py-1 px-2 rounded font-semibold text-center transition-all ${
+                comboSubTab === 'fusions'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Saved ({savedFusions.length})
+            </button>
+          </div>
+
+          {/* Quick Subtab Action Bar (Clear/Reset options) */}
+          {comboSubTab === 'pairs' && combinations.length > 0 && onClearAllCombinations && (
+            <div className="flex items-center justify-between px-1 text-[10px]">
+              <span className="text-slate-500 font-mono">Recorded Pair Blends</span>
+              {confirmClearCombos ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-rose-400 font-medium">Clear all mix history?</span>
+                  <button
+                    onClick={() => {
+                      onClearAllCombinations();
+                      setConfirmClearCombos(false);
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors"
+                  >
+                    Yes, Clear
+                  </button>
+                  <button
+                    onClick={() => setConfirmClearCombos(false)}
+                    className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  id="clear-all-mix-records-btn"
+                  onClick={() => setConfirmClearCombos(true)}
+                  className="flex items-center gap-1 text-slate-500 hover:text-rose-400 transition-colors"
+                  title="Clear all recorded synergy combinations"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Mix History</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {comboSubTab === 'styles' && combinedStylesRanked.length > 0 && onResetAllCombineCounts && (
+            <div className="flex items-center justify-between px-1 text-[10px]">
+              <span className="text-slate-500 font-mono">Styles by Fusion Count</span>
+              {confirmResetCounts ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-amber-400 font-medium">Reset all combine counts?</span>
+                  <button
+                    onClick={() => {
+                      onResetAllCombineCounts();
+                      setConfirmResetCounts(false);
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold transition-colors"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => setConfirmResetCounts(false)}
+                    className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  id="reset-all-combine-counts-btn"
+                  onClick={() => setConfirmResetCounts(true)}
+                  className="flex items-center gap-1 text-slate-500 hover:text-amber-400 transition-colors"
+                  title="Reset combine counters to zero"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset All Counts</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {comboSubTab === 'fusions' && savedFusions.length > 0 && onDeleteAllSavedFusions && (
+            <div className="flex items-center justify-between px-1 text-[10px]">
+              <span className="text-slate-500 font-mono">Saved Combined Presets</span>
+              {confirmDeleteFusions ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-rose-400 font-medium">Delete all {savedFusions.length} fusions?</span>
+                  <button
+                    onClick={() => {
+                      onDeleteAllSavedFusions();
+                      setConfirmDeleteFusions(false);
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors"
+                  >
+                    Delete All
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteFusions(false)}
+                    className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  id="delete-all-fusions-btn"
+                  onClick={() => setConfirmDeleteFusions(true)}
+                  className="flex items-center gap-1 text-slate-500 hover:text-rose-400 transition-colors"
+                  title="Delete all saved fusion presets from library"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Delete All Fusions</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -343,17 +487,30 @@ export function LeaderboardPanel({
                           </div>
                         </div>
 
-                        {onOpenCombiner && (
-                          <button
-                            id={`fuse-pair-btn-${idx}`}
-                            onClick={() => handleLaunchPair(combo)}
-                            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 text-[10px] font-bold transition-colors"
-                            title="Load this pair into Combiner"
-                          >
-                            <Zap className="w-2.5 h-2.5" />
-                            <span>Fuse</span>
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {onOpenCombiner && (
+                            <button
+                              id={`fuse-pair-btn-${idx}`}
+                              onClick={() => handleLaunchPair(combo)}
+                              className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 text-[10px] font-bold transition-colors"
+                              title="Load this pair into Combiner"
+                            >
+                              <Zap className="w-2.5 h-2.5" />
+                              <span>Fuse</span>
+                            </button>
+                          )}
+
+                          {onDeleteCombination && (
+                            <button
+                              id={`delete-pair-btn-${idx}`}
+                              onClick={() => onDeleteCombination(combo.pairKey)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-800/40 transition-colors"
+                              title="Delete this mix record"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -406,6 +563,7 @@ export function LeaderboardPanel({
                           <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/40">
                             {count} fusions
                           </span>
+
                           {onOpenCombiner && (
                             <button
                               onClick={() => handleLaunchSingleStyle(preset)}
@@ -413,6 +571,16 @@ export function LeaderboardPanel({
                               title="Combine this style with another"
                             >
                               <Layers className="w-3 h-3 text-indigo-400" />
+                            </button>
+                          )}
+
+                          {onResetStyleCombineCount && (
+                            <button
+                              onClick={() => onResetStyleCombineCount(preset.id)}
+                              className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-950/30 transition-colors"
+                              title="Reset fusion counter for this style"
+                            >
+                              <RotateCcw className="w-3 h-3" />
                             </button>
                           )}
                         </div>
@@ -433,20 +601,44 @@ export function LeaderboardPanel({
                 savedFusions.map((preset, idx) => (
                   <div
                     key={preset.id}
-                    className="p-2 rounded-lg border border-slate-800 bg-[#0f1117] hover:border-emerald-500/40 transition-all"
+                    className="p-2.5 rounded-lg border border-slate-800 bg-[#0f1117] hover:border-purple-500/40 transition-all"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-white truncate">{preset.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-800/40 shrink-0">
+                            Fusion
+                          </span>
+                          <p className="text-xs font-bold text-white truncate">{preset.name}</p>
+                        </div>
                         {preset.parentStyleNames && (
-                          <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                            From: {preset.parentStyleNames[0]} + {preset.parentStyleNames[1]}
+                          <p className="text-[10px] text-slate-400 truncate mt-1">
+                            Parents: {preset.parentStyleNames[0]} + {preset.parentStyleNames[1]}
                           </p>
                         )}
                       </div>
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/40 shrink-0">
-                        Fusion
-                      </span>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {onOpenCombiner && (
+                          <button
+                            onClick={() => handleLaunchSingleStyle(preset)}
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                            title="Open in Combiner"
+                          >
+                            <Zap className="w-3 h-3 text-purple-400" />
+                          </button>
+                        )}
+                        {onDeletePreset && (
+                          <button
+                            id={`delete-saved-fusion-${preset.id}`}
+                            onClick={() => onDeletePreset(preset.id)}
+                            className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-800/40 transition-colors"
+                            title="Delete this saved fusion preset"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
