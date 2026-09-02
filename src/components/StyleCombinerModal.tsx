@@ -64,7 +64,7 @@ export function StyleCombinerModal({
   const [styleAId, setStyleAId] = useState<string>('');
   const [styleBId, setStyleBId] = useState<string>('');
   const [blendMode, setBlendMode] = useState<BlendMode>('smart');
-  const [subject, setSubject] = useState('a cybernetic samurai warrior');
+  const [subject, setSubject] = useState('');
   const [weightA, setWeightA] = useState(1.1);
   const [weightB, setWeightB] = useState(0.9);
   const [stepRatio, setStepRatio] = useState(0.5);
@@ -579,16 +579,26 @@ export function StyleCombinerModal({
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3 text-amber-400" />
-                Custom Subject / Focal Object
+                Custom Subject / Focal Object (Optional)
               </label>
-              <span className="text-[10px] text-slate-500">Injects subject into blended styles</span>
+              {subject ? (
+                <button
+                  type="button"
+                  onClick={() => setSubject('')}
+                  className="text-[10px] text-rose-400 hover:text-rose-300 transition-colors"
+                >
+                  Clear Subject (Pure Style)
+                </button>
+              ) : (
+                <span className="text-[10px] text-slate-500">Pure style blend active</span>
+              )}
             </div>
             <input
               id="combiner-subject-input"
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="e.g. a cybernetic samurai warrior, ethereal sorceress, neon landscape..."
+              placeholder="Leave empty for pure style prompt, or type a subject (e.g. samurai warrior, landscape)..."
               className="w-full px-3 py-2 bg-[#0f1117] border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-medium"
             />
 

@@ -34,9 +34,10 @@ const BOILERPLATE_TOKENS = new Set([
  */
 export function splitPromptIntoTokens(prompt: string): string[] {
   return prompt
+    .replace(/\{prompt\}/gi, '')
     .split(/[,;\n]+/)
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter((s) => Boolean(s) && s.toLowerCase() !== 'prompt');
 }
 
 /**
@@ -47,12 +48,14 @@ export function deduplicateTokens(tokens: string[]): string[] {
   const result: string[] = [];
 
   for (const raw of tokens) {
-    const norm = raw.toLowerCase().replace(/[{}]/g, '').trim();
-    if (!norm) continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const norm = trimmed.toLowerCase().replace(/[{}]/g, '').trim();
+    if (!norm || norm === 'prompt') continue;
 
     if (!seen.has(norm)) {
       seen.add(norm);
-      result.push(raw);
+      result.push(trimmed);
     }
   }
 
@@ -90,11 +93,21 @@ export function combinePositivePrompts(
   const rawPromptA = styleA.prompt.trim();
   const rawPromptB = styleB.prompt.trim();
 
-  // Strip '{prompt}' marker from style prompts for clean composition
-  const cleanA = rawPromptA.replace(/\{prompt\}/g, '').trim().replace(/^,\s*/, '').replace(/,\s*$/, '');
-  const cleanB = rawPromptB.replace(/\{prompt\}/g, '').trim().replace(/^,\s*/, '').replace(/,\s*$/, '');
+  // Strip '{prompt}' marker and clean up delimiters
+  const cleanPromptString = (p: string) =>
+    p
+      .replace(/\{prompt\}/gi, '')
+      .trim()
+      .replace(/^[,\s]+/, '')
+      .replace(/[,\s]+$/, '')
+      .replace(/,\s*,/g, ',')
+      .trim();
 
-  const subj = subject.trim();
+  const cleanA = cleanPromptString(rawPromptA);
+  const cleanB = cleanPromptString(rawPromptB);
+
+  // Subject is stripped of any literal {prompt} tokens as well
+  const subj = cleanPromptString(subject);
 
   if (mode === 'sequential') {
     // Subject, Style A, Style B
@@ -161,7 +174,7 @@ export function createCombinedPreset(
 ): StylePreset {
   const combinedPositive = combinePositivePrompts(styleA, styleB, {
     ...options,
-    subject: '{prompt}',
+    subject: options.subject ? options.subject.replace(/\{prompt\}/gi, '').trim() : '',
   });
   const combinedNegative = mergeNegativePrompts(styleA.negative_prompt, styleB.negative_prompt);
 
