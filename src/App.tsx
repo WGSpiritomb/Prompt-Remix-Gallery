@@ -179,6 +179,7 @@ export default function App() {
   };
 
   const handleToggleSelectForFusion = (preset: StylePreset) => {
+    if (!preset) return;
     if (fusionSlotA?.id === preset.id) {
       setFusionSlotA(null);
       showToast('Removed from Slot A', preset.name, 'info');
@@ -190,9 +191,10 @@ export default function App() {
       showToast('Selected as Style A (Base)', preset.name, 'info');
     } else if (!fusionSlotB) {
       setFusionSlotB(preset);
+      const partnerName = fusionSlotA?.name || 'Style A';
       showToast(
         'Selected as Style B (Accent)',
-        `Ready to blend with "${fusionSlotA.name}"!`,
+        `Ready to blend with "${partnerName}"!`,
         'success'
       );
     } else {
@@ -208,12 +210,15 @@ export default function App() {
     if (idxB >= idxA) idxB++;
     const a = presets[idxA];
     const b = presets[idxB];
-    setFusionSlotA(a);
-    setFusionSlotB(b);
-    showToast('Random Pair Selected', `${a.name} + ${b.name}`, 'info');
+    if (a && b) {
+      setFusionSlotA(a);
+      setFusionSlotB(b);
+      showToast('Random Pair Selected', `${a.name} + ${b.name}`, 'info');
+    }
   };
 
   const handleRecordCombination = (styleA: StylePreset, styleB: StylePreset, mode: BlendMode) => {
+    if (!styleA || !styleB) return;
     // Increment combineCount on both presets
     setPresets((prev) =>
       prev.map((p) => {

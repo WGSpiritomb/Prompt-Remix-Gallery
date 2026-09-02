@@ -233,20 +233,28 @@ export function loadCombinations(presets: StylePreset[]): StylePairCombination[]
   try {
     const saved = localStorage.getItem(COMBOS_STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved) as StylePairCombination[];
-      // Sync names and image URLs with current presets
-      const presetMap = new Map(presets.map((p) => [p.id, p]));
-      return parsed.map((combo) => {
-        const a = presetMap.get(combo.styleAId);
-        const b = presetMap.get(combo.styleBId);
-        return {
-          ...combo,
-          styleAName: a ? a.name : combo.styleAName,
-          styleBName: b ? b.name : combo.styleBName,
-          styleAImage: a?.image_url || combo.styleAImage,
-          styleBImage: b?.image_url || combo.styleBImage,
-        };
-      });
+      const parsed = JSON.parse(saved);
+      const list: StylePairCombination[] | null = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.updatedCombinations)
+        ? parsed.updatedCombinations
+        : null;
+
+      if (list && list.length > 0) {
+        // Sync names and image URLs with current presets
+        const presetMap = new Map(presets.map((p) => [p.id, p]));
+        return list.map((combo) => {
+          const a = presetMap.get(combo.styleAId);
+          const b = presetMap.get(combo.styleBId);
+          return {
+            ...combo,
+            styleAName: a ? a.name : combo.styleAName,
+            styleBName: b ? b.name : combo.styleBName,
+            styleAImage: a?.image_url || combo.styleAImage,
+            styleBImage: b?.image_url || combo.styleBImage,
+          };
+        });
+      }
     }
   } catch (e) {
     console.error('Failed to load combination stats', e);
@@ -258,22 +266,27 @@ export function loadCombinations(presets: StylePreset[]): StylePairCombination[]
  * Records a combination event between 2 styles and returns the updated combinations list
  */
 export function recordCombinationEvent(
-  styleA: StylePreset,
-  styleB: StylePreset,
+  styleA: StylePreset | null | undefined,
+  styleB: StylePreset | null | undefined,
   mode: BlendMode,
-  currentCombinations: StylePairCombination[]
-): { updatedCombinations: StylePairCombination[]; newPairRecord: StylePairCombination } {
-  const pairKey = getCanonicalPairKey(styleA.id, styleB.id);
+  currentCombinations: StylePairCombination[] = []
+): StylePairCombination[] {
+  const safeCombinations = Array.isArray(currentCombinations) ? [...currentCombinations] : [];
 
-  const existingIdx = currentCombinations.findIndex((c) => c.pairKey === pairKey);
+  if (!styleA || !styleB || !styleA.id || !styleB.id) {
+    return safeCombinations;
+  }
+
+  const pairKey = getCanonicalPairKey(styleA.id, styleB.id);
+  const existingIdx = safeCombinations.findIndex((c) => c && c.pairKey === pairKey);
   let newPairRecord: StylePairCombination;
   let updatedCombinations: StylePairCombination[];
 
   if (existingIdx >= 0) {
-    const existing = currentCombinations[existingIdx];
+    const existing = safeCombinations[existingIdx];
     newPairRecord = {
       ...existing,
-      count: existing.count + 1,
+      count: (existing?.count || 0) + 1,
       lastCombinedAt: Date.now(),
       preferredBlendMode: mode,
       styleAName: styleA.name,
@@ -282,9 +295,9 @@ export function recordCombinationEvent(
       styleBImage: styleB.image_url,
     };
     updatedCombinations = [
-      ...currentCombinations.slice(0, existingIdx),
+      ...safeCombinations.slice(0, existingIdx),
       newPairRecord,
-      ...currentCombinations.slice(existingIdx + 1),
+      ...safeCombinations.slice(existingIdx + 1),
     ];
   } else {
     newPairRecord = {
@@ -299,11 +312,11 @@ export function recordCombinationEvent(
       lastCombinedAt: Date.now(),
       preferredBlendMode: mode,
     };
-    updatedCombinations = [newPairRecord, ...currentCombinations];
+    updatedCombinations = [newPairRecord, ...safeCombinations];
   }
 
   // Sort by count descending
-  updatedCombinations.sort((a, b) => b.count - a.count);
+  updatedCombinations.sort((a, b) => (b.count || 0) - (a.count || 0));
 
   try {
     localStorage.setItem(COMBOS_STORAGE_KEY, JSON.stringify(updatedCombinations));
@@ -311,5 +324,5 @@ export function recordCombinationEvent(
     console.error('Failed to persist combination records', e);
   }
 
-  return { updatedCombinations, newPairRecord };
+  return updatedCombinations;
 }

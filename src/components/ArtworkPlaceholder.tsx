@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Palette, Sparkles, ImageOff } from 'lucide-react';
 
 interface ArtworkPlaceholderProps {
@@ -120,7 +121,9 @@ export function ImageWithFallback({
   className?: string;
   onClick?: () => void;
 }) {
-  if (!src) {
+  const [imgError, setImgError] = useState(false);
+
+  if (!src || imgError) {
     return (
       <div onClick={onClick} className={`cursor-pointer overflow-hidden ${className}`}>
         <ArtworkPlaceholder name={name} artists={artists} tags={tags} />
@@ -138,20 +141,9 @@ export function ImageWithFallback({
         alt={alt}
         loading="lazy"
         referrerPolicy="no-referrer"
-        onError={(e) => {
-          // Hide broken image and show fallback
-          (e.target as HTMLElement).style.display = 'none';
-          const parent = (e.target as HTMLElement).parentElement;
-          if (parent) {
-            const fallback = parent.querySelector('.fallback-container');
-            if (fallback) (fallback as HTMLElement).style.display = 'block';
-          }
-        }}
+        onError={() => setImgError(true)}
         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
-      <div className="fallback-container hidden w-full h-full absolute inset-0">
-        <ArtworkPlaceholder name={name} artists={artists} tags={tags} />
-      </div>
     </div>
   );
 }
