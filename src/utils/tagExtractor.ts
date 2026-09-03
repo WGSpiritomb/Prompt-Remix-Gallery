@@ -1,9 +1,8 @@
 import { StylePreset, ExtractedTag } from '../types';
 
-// Predefined list of known AI art artists for accurate token extraction
+// Predefined list of known modern digital and mix artists for accurate token extraction
 const KNOWN_ARTISTS = [
   'Greg Rutkowski',
-  'Alphonse Mucha',
   'Makoto Shinkai',
   'WLOP',
   'Artgerm',
@@ -12,7 +11,6 @@ const KNOWN_ARTISTS = [
   'Moebius',
   'Jean Giraud',
   'Ilya Kuvshinov',
-  'Thomas Kinkade',
   'Rossdraws',
   'Hayao Miyazaki',
   'Studio Ghibli',
@@ -24,11 +22,6 @@ const KNOWN_ARTISTS = [
   'Craig Mullins',
   'Yoshitaka Amano',
   'Jeremy Lipking',
-  'Norman Rockwell',
-  'John Singer Sargent',
-  'Vincent van Gogh',
-  'Claude Monet',
-  'Rembrandt',
   'Katsuhiro Otomo',
   'Junji Ito',
   'Beeple',
@@ -39,15 +32,84 @@ const KNOWN_ARTISTS = [
   'Fenghua Zhong',
   'Victo Ngai',
   'Benoit B. Mandelbrot',
-  'J.C. Leyendecker',
   'Frank Frazetta',
-  'Eyvind Earle',
-  'Wassily Kandinsky',
-  'Gustav Klimt',
-  'Caravaggio',
-  'Leonardo da Vinci',
-  'Caspar David Friedrich',
+  'Vitaly Bulgarov',
+  '@warashi',
+  '@ciloranko',
+  '@maratang',
+  '@fkey',
 ];
+
+// Comprehensive traditional & classical fine-art painter exclusion list
+export const TRADITIONAL_ARTIST_NAMES = new Set([
+  'gustav klimt',
+  'wassily kandinsky',
+  'vincent van gogh',
+  'claude monet',
+  'rembrandt',
+  'caravaggio',
+  'leonardo da vinci',
+  'caspar david friedrich',
+  'alphonse mucha',
+  'john singer sargent',
+  'norman rockwell',
+  'j.c. leyendecker',
+  'jc leyendecker',
+  'eyvind earle',
+  'thomas kinkade',
+  'hokusai',
+  'hiroshige',
+  'michelangelo',
+  'edvard munch',
+  'pablo picasso',
+  'salvador dali',
+  'paul cezanne',
+  'edgar degas',
+  'henri matisse',
+  'william-adolphe bouguereau',
+  'william adolphe bouguereau',
+  'jules joseph lefebvre',
+  'eugene delacroix',
+  'j.m.w. turner',
+  'jmw turner',
+  'francisco goya',
+  'johannes vermeer',
+  'sandro botticelli',
+  'raphael',
+  'paul gauguin',
+  'pierre-auguste renoir',
+  'renoir',
+  'gustave dore',
+  'gustave doré',
+  'albrecht durer',
+  'albrecht dürer',
+  'frederic edwin church',
+  'albert bierstadt',
+  'winslow homer',
+  'edward hopper',
+  'georgia o\'keeffe',
+  'georgia okeeffe',
+  'henri rousseau',
+  'paul klee',
+  'piet mondrian',
+  'gustave courbet',
+  'camille pissarro',
+  'georges seurat',
+]);
+
+/**
+ * Returns true if name corresponds to a traditional historical painter
+ */
+export function isTraditionalArtist(name: string): boolean {
+  if (!name) return false;
+  const clean = name
+    .toLowerCase()
+    .replace(/^(?:art\s+by|painted\s+by|drawn\s+by|artwork\s+by|by)\s+/i, '')
+    .trim();
+  // Handle tags starting with @ are digital/mix tags, never traditional
+  if (clean.startsWith('@')) return false;
+  return TRADITIONAL_ARTIST_NAMES.has(clean);
+}
 
 const KNOWN_TAGS_MAP: Record<string, 'medium' | 'engine' | 'lighting' | 'quality' | 'general'> = {
   // Rendering & Engine
@@ -185,6 +247,11 @@ export function extractArtists(promptText: string): string[] {
           !lower.includes('day') &&
           !lower.includes('far')
         ) {
+          // Strictly exclude traditional historical artists
+          if (isTraditionalArtist(candidate)) {
+            continue;
+          }
+
           // If the candidate contains backslashes or parentheses, preserve its exact casing and characters
           if (candidate.includes('\\') || candidate.includes('(') || candidate.includes(')')) {
             foundArtists.add(candidate);
@@ -196,9 +263,10 @@ export function extractArtists(promptText: string): string[] {
     }
   }
 
-  // 3. Scan for known artist database tokens
+  // 3. Scan for known artist database tokens (modern mix artists only, strictly no traditional artists)
   const promptLower = promptText.toLowerCase();
   for (const artist of KNOWN_ARTISTS) {
+    if (isTraditionalArtist(artist)) continue;
     const artistLower = artist.toLowerCase();
     // Match word boundaries
     const regex = new RegExp(`\\b${artistLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
@@ -212,7 +280,7 @@ export function extractArtists(promptText: string): string[] {
 
 /**
  * Returns all unique artists found across all presets in the library.
- * Seeds with curated known AI artists if fewer than 10 unique artists exist in library.
+ * Strictly uses artists already in mixes/presets, never traditional fine-art painters.
  */
 export function getAllUniqueArtists(presets: StylePreset[]): string[] {
   const uniqueMap = new Map<string, string>(); // lowercase key -> display string
@@ -224,16 +292,28 @@ export function getAllUniqueArtists(presets: StylePreset[]): string[] {
 
     for (const a of artists) {
       const clean = a.trim();
-      if (clean && !uniqueMap.has(clean.toLowerCase())) {
+      if (clean && !isTraditionalArtist(clean) && !uniqueMap.has(clean.toLowerCase())) {
         uniqueMap.set(clean.toLowerCase(), clean);
       }
     }
   }
 
-  // Ensure rich artist pool by seeding known artists
-  for (const artist of KNOWN_ARTISTS) {
-    if (!uniqueMap.has(artist.toLowerCase())) {
-      uniqueMap.set(artist.toLowerCase(), artist);
+  // Fallback ONLY if the library has no artists in any preset/mix (e.g. empty library)
+  if (uniqueMap.size === 0) {
+    const fallbackMixArtists = [
+      '@warashi',
+      '@wlop',
+      '@artgerm',
+      '@kuvshinov',
+      '@shinkai',
+      '@rossdraws',
+      '@loish',
+      '@ciloranko',
+      '@maratang',
+      '@fkey',
+    ];
+    for (const a of fallbackMixArtists) {
+      uniqueMap.set(a.toLowerCase(), a);
     }
   }
 

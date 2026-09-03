@@ -432,7 +432,7 @@ export function pickSingleRandomArtist(allArtists: string[], exclude: string[] =
   const excludeSet = new Set(exclude.map((e) => e.toLowerCase().trim()));
   const candidates = allArtists.filter((a) => !excludeSet.has(a.toLowerCase().trim()));
   const pool = candidates.length > 0 ? candidates : allArtists;
-  if (pool.length === 0) return 'Greg Rutkowski';
+  if (pool.length === 0) return '@warashi';
   return pool[Math.floor(Math.random() * pool.length)];
 }
 

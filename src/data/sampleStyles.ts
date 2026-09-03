@@ -12,7 +12,7 @@ export const INITIAL_SAMPLE_PRESETS_RAW: Omit<StylePreset, 'id' | 'createdAt'>[]
   },
   {
     name: 'Art Nouveau Elegance',
-    prompt: '{prompt}, elegant art nouveau style, intricate organic floral filigree borders, gold leaf accents, delicate linework, pastel tones, masterpiece, by Alphonse Mucha and Gustav Klimt',
+    prompt: '{prompt}, elegant decorative illustration, intricate organic floral filigree borders, gold leaf accents, delicate linework, pastel tones, masterpiece, by Ilya Kuvshinov and WLOP',
     negative_prompt: 'modern, photograph, 3d render, chaotic, dirty, messy background, lowres, bad anatomy',
     image_url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=800&q=80',
     favorite: true,
@@ -60,7 +60,7 @@ export const INITIAL_SAMPLE_PRESETS_RAW: Omit<StylePreset, 'id' | 'createdAt'>[]
   },
   {
     name: 'Ukiyo-e Woodblock Print',
-    prompt: '{prompt}, traditional Japanese woodblock print, bold ink contours, textured washi paper, natural mineral pigments, flowing waves and clouds, ukiyo-e style, art by Hokusai and Hiroshige',
+    prompt: '{prompt}, stylized woodblock graphic print, bold ink contours, textured washi paper, natural mineral pigments, flowing waves and clouds, dynamic anime aesthetic, art by Katsuhiro Otomo and Junji Ito',
     negative_prompt: 'modern, western, photograph, glossy 3d render, neon glow, blur, modern clothing',
     image_url: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?auto=format&fit=crop&w=800&q=80',
     favorite: false,
@@ -124,7 +124,7 @@ export const INITIAL_SAMPLE_PRESETS_RAW: Omit<StylePreset, 'id' | 'createdAt'>[]
   },
   {
     name: 'Nordic Solitude Scenery',
-    prompt: '{prompt}, vast foggy Scandinavian fjord landscape, minimalist composition, muted cool palette, lone cabin with glowing window, atmospheric mist, cinematic lighting, by Simon Stålenhag and Caspar David Friedrich',
+    prompt: '{prompt}, vast foggy Scandinavian fjord landscape, minimalist composition, muted cool palette, lone cabin with glowing window, atmospheric mist, cinematic lighting, by Simon Stålenhag and Craig Mullins',
     negative_prompt: 'crowded, tropical, oversaturated, neon, chaotic, blurry, cartoon, low resolution',
     image_url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
     favorite: false,

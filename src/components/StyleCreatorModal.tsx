@@ -45,10 +45,20 @@ export function StyleCreatorModal({
   onTestInSandbox,
   onCopyText,
 }: StyleCreatorModalProps) {
-  // All unique artists available across the library
-  const allUniqueArtists = useMemo(() => {
-    return getAllUniqueArtists(presets);
+  // Check if any combined/fusion mixes exist in presets
+  const hasFusions = useMemo(() => {
+    return presets.some((p) => p.isCombined);
   }, [presets]);
+
+  const [artistSource, setArtistSource] = useState<'all' | 'fusions'>('all');
+
+  // All unique artists available across the library mixes (strictly no traditional artists)
+  const allUniqueArtists = useMemo(() => {
+    const targetPresets = (artistSource === 'fusions' && hasFusions)
+      ? presets.filter((p) => p.isCombined)
+      : presets;
+    return getAllUniqueArtists(targetPresets);
+  }, [presets, artistSource, hasFusions]);
 
   // 3 Artist Slots state
   const [artists, setArtists] = useState<[string, string, string]>(() => {
@@ -245,7 +255,7 @@ export function StyleCreatorModal({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Picks 3 random artists from all {allUniqueArtists.length} available unique styles and blends them cleanly.
+                Picks 3 random artists exclusively from your library mixes and presets ({allUniqueArtists.length} available).
               </p>
             </div>
           </div>
@@ -263,11 +273,36 @@ export function StyleCreatorModal({
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Big Action Bar: Roll 3 Random Artists */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-slate-900/40 border border-indigo-500/20 shadow-inner">
-            <div className="flex items-center gap-2 text-xs text-slate-300">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-ping" />
               <span>
-                Available Pool: <strong className="text-white font-mono">{allUniqueArtists.length}</strong> unique artists
+                Mix Artists Pool: <strong className="text-white font-mono">{allUniqueArtists.length}</strong> artists
               </span>
+
+              {hasFusions && (
+                <div className="flex items-center gap-1 p-0.5 rounded-md bg-black/40 border border-white/[0.08] text-[11px]">
+                  <button
+                    onClick={() => setArtistSource('all')}
+                    className={`px-2 py-0.5 rounded transition-colors ${
+                      artistSource === 'all'
+                        ? 'bg-indigo-600 text-white font-semibold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    All Mixes
+                  </button>
+                  <button
+                    onClick={() => setArtistSource('fusions')}
+                    className={`px-2 py-0.5 rounded transition-colors ${
+                      artistSource === 'fusions'
+                        ? 'bg-indigo-600 text-white font-semibold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Fusions Only
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
@@ -369,7 +404,7 @@ export function StyleCreatorModal({
                   {/* Format pill info */}
                   <div className="mt-3 pt-2 border-t border-white/[0.05] flex items-center justify-between text-[10px] text-slate-400 font-mono">
                     <span>
-                      {artist.startsWith('@') ? 'Handle tag' : 'Traditional'}
+                      {artist.startsWith('@') ? '@Handle Tag' : 'Mix Artist'}
                     </span>
                     {blendMode === 'weighted' && (
                       <span className="text-indigo-300">
