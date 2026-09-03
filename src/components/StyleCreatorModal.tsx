@@ -8,7 +8,6 @@ import {
   Copy,
   Check,
   Plus,
-  Wand2,
   X,
   ChevronDown,
   Layers,
@@ -33,7 +32,6 @@ interface StyleCreatorModalProps {
   onClose: () => void;
   presets: StylePreset[];
   onSavePreset: (newPreset: Omit<StylePreset, 'id' | 'createdAt'>) => void;
-  onTestInSandbox?: (preset: StylePreset) => void;
   onCopyText: (text: string, label: string) => void;
 }
 
@@ -42,7 +40,6 @@ export function StyleCreatorModal({
   onClose,
   presets,
   onSavePreset,
-  onTestInSandbox,
   onCopyText,
 }: StyleCreatorModalProps) {
   // Check if any combined/fusion mixes exist in presets
@@ -199,21 +196,6 @@ export function StyleCreatorModal({
     onCopyText(generatedPrompt, '3-Artist Mix prompt copied');
     setCopiedPrompt(true);
     setTimeout(() => setCopiedPrompt(false), 2000);
-  };
-
-  // Handle Sandbox
-  const handleSandbox = () => {
-    if (onTestInSandbox) {
-      onTestInSandbox({
-        id: `preview_${Date.now()}`,
-        name: presetName || '3-Artist Mix',
-        prompt: generatedPrompt,
-        negative_prompt: negativePrompt,
-        createdAt: Date.now(),
-        derivedArtists: artists,
-      });
-      onClose();
-    }
   };
 
   // Filtered artists for search dropdown
@@ -586,17 +568,6 @@ export function StyleCreatorModal({
               <Dices className="w-3.5 h-3.5 text-indigo-400" />
               <span>Roll Next Trio</span>
             </button>
-
-            {onTestInSandbox && (
-              <button
-                id="sandbox-mix-btn"
-                onClick={handleSandbox}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white liquid-glass-pill"
-              >
-                <Wand2 className="w-3.5 h-3.5 text-purple-400" />
-                <span>Test in Sandbox</span>
-              </button>
-            )}
           </div>
 
           <div className="flex items-center gap-2">

@@ -8,7 +8,7 @@ import {
   Star,
   Sparkles,
   Ban,
-  Wand2,
+  Trash2,
   Edit2,
   Users,
   Tag,
@@ -24,8 +24,8 @@ interface LightboxModalProps {
   presetsList: StylePreset[];
   onSelectPreset: (preset: StylePreset) => void;
   onEditPreset: (preset: StylePreset) => void;
+  onDeletePreset?: (id: string) => void;
   onToggleFavorite: (id: string) => void;
-  onTestInSandbox: (preset: StylePreset) => void;
   onOpenCombiner?: (preset: StylePreset) => void;
   onCopyText: (text: string, label: string) => void;
 }
@@ -37,8 +37,8 @@ export function LightboxModal({
   presetsList,
   onSelectPreset,
   onEditPreset,
+  onDeletePreset,
   onToggleFavorite,
-  onTestInSandbox,
   onOpenCombiner,
   onCopyText,
 }: LightboxModalProps) {
@@ -274,42 +274,49 @@ export function LightboxModal({
           </div>
 
           {/* Bottom Actions Toolbar */}
-          <div className="pt-3.5 mt-3.5 border-t border-slate-800 flex items-center justify-between gap-2">
-            <button
-              onClick={() => {
-                onClose();
-                onTestInSandbox(preset);
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>Prompt Sandbox</span>
-            </button>
-
+          <div className="pt-3.5 mt-3.5 border-t border-zinc-800 flex items-center justify-between gap-2">
             {onOpenCombiner && (
               <button
                 onClick={() => {
                   onClose();
                   onOpenCombiner(preset);
                 }}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-700 transition-colors"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 transition-colors"
                 title="Combine this style with another"
               >
                 <Layers className="w-3.5 h-3.5 text-purple-400" />
-                <span>Combine</span>
+                <span>Combine Style</span>
               </button>
             )}
 
-            <button
-              onClick={() => {
-                onClose();
-                onEditPreset(preset);
-              }}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-            >
-              <Edit2 className="w-3.5 h-3.5 text-slate-400" />
-              <span>Edit</span>
-            </button>
+            <div className="flex items-center gap-2 ml-auto">
+              {onDeletePreset && (
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Delete "${preset.name}"?`)) {
+                      onDeletePreset(preset.id);
+                      onClose();
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-rose-950/40 hover:bg-rose-950 text-rose-300 border border-rose-800/60 transition-colors"
+                  title={preset.isCombined ? 'Delete Mix' : 'Delete Preset'}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>{preset.isCombined ? 'Delete Mix' : 'Delete'}</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  onClose();
+                  onEditPreset(preset);
+                }}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Edit</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

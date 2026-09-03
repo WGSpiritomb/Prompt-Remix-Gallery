@@ -7,8 +7,6 @@ import {
   Trash2,
   CopyPlus,
   Maximize2,
-  SlidersHorizontal,
-  Wand2,
   Sparkles,
   Download,
   Layers,
@@ -24,9 +22,8 @@ interface TableViewProps {
   onDeletePreset: (id: string) => void;
   onDuplicatePreset: (preset: StylePreset) => void;
   onToggleFavorite: (id: string) => void;
-  onSelectArtist: (artist: string) => void;
-  onSelectTag: (tag: string) => void;
-  onTestInSandbox: (preset: StylePreset) => void;
+  onSelectArtist?: (artist: string) => void;
+  onSelectTag?: (tag: string) => void;
   onOpenCombiner?: (preset: StylePreset) => void;
   onOpenCombinerWithPair?: (styleA: StylePreset, styleB: StylePreset) => void;
   onCopyText: (text: string, label: string) => void;
@@ -43,7 +40,6 @@ export function TableView({
   onToggleFavorite,
   onSelectArtist,
   onSelectTag,
-  onTestInSandbox,
   onOpenCombiner,
   onOpenCombinerWithPair,
   onCopyText,
@@ -164,32 +160,31 @@ export function TableView({
       )}
 
       {/* Table Container */}
-      <div className="bg-[#161b22] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+      <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             {/* Table Header */}
             <thead>
-              <tr className="border-b border-slate-800 bg-[#0f1117] text-slate-500 font-bold uppercase tracking-widest text-[10px] select-none">
+              <tr className="border-b border-zinc-800 bg-black text-zinc-400 font-semibold uppercase tracking-wider text-[10px] select-none">
                 <th className="py-3 px-3 w-10 text-center">
                   <input
                     type="checkbox"
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     aria-label="Select all presets"
-                    className="w-3.5 h-3.5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+                    className="w-3.5 h-3.5 rounded bg-zinc-900 border-zinc-700 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
                   />
                 </th>
                 <th className="py-3 px-2 w-14 text-center">Preview</th>
-                <th className="py-3 px-3 w-48">Style Name</th>
-                <th className="py-3 px-3 min-w-[280px]">Positive Prompt</th>
-                <th className="py-3 px-3 min-w-[220px]">Negative Prompt</th>
-                <th className="py-3 px-3 w-44">Derived Artists & Tags</th>
+                <th className="py-3 px-3 w-52">Style Name</th>
+                <th className="py-3 px-3 min-w-[300px]">Positive Prompt</th>
+                <th className="py-3 px-3 min-w-[240px]">Negative Prompt</th>
                 <th className="py-3 px-3 w-32 text-right">Actions</th>
               </tr>
             </thead>
 
             {/* Table Body */}
-            <tbody className="divide-y divide-slate-800 font-mono">
+            <tbody className="divide-y divide-zinc-800 font-mono">
               {presets.map((preset, index) => {
                 const isSelected = selectedIds.has(preset.id);
                 const isPromptCopied = copiedField?.id === preset.id && copiedField.type === 'prompt';
@@ -203,8 +198,8 @@ export function TableView({
                       isSelected
                         ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
                         : index % 2 === 0
-                        ? 'bg-[#161b22] hover:bg-slate-800/30'
-                        : 'bg-[#0f1117]/60 hover:bg-slate-800/30'
+                        ? 'bg-black hover:bg-zinc-900/40'
+                        : 'bg-zinc-950/60 hover:bg-zinc-900/40'
                     }`}
                   >
                     {/* Row Select */}
@@ -339,34 +334,8 @@ export function TableView({
                           </button>
                         </div>
                       ) : (
-                        <span className="text-slate-600 italic font-sans text-xs">None</span>
+                        <span className="text-zinc-600 italic font-sans text-xs">None</span>
                       )}
-                    </td>
-
-                    {/* Extracted Tags & Artists */}
-                    <td className="py-2.5 px-3 font-sans">
-                      <div className="flex flex-wrap gap-1 max-w-[200px]">
-                        {preset.derivedArtists?.slice(0, 2).map((artist) => (
-                          <button
-                            key={artist}
-                            onClick={() => onSelectArtist(artist)}
-                            className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-900/50 truncate max-w-[150px]"
-                            title={`Filter artist: ${artist}`}
-                          >
-                            {artist}
-                          </button>
-                        ))}
-                        {preset.derivedTags?.slice(0, 2).map((tag) => (
-                          <button
-                            key={tag}
-                            onClick={() => onSelectTag(tag)}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:bg-slate-700"
-                            title={`Filter tag: ${tag}`}
-                          >
-                            #{tag}
-                          </button>
-                        ))}
-                      </div>
                     </td>
 
                     {/* Action Buttons */}
@@ -382,14 +351,6 @@ export function TableView({
                             <Layers className="w-3.5 h-3.5 text-purple-400" />
                           </button>
                         )}
-                        <button
-                          id={`table-sandbox-${preset.id}`}
-                          onClick={() => onTestInSandbox(preset)}
-                          className="p-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-indigo-300 transition-colors"
-                          title="Test in Prompt Sandbox"
-                        >
-                          <Wand2 className="w-3.5 h-3.5 text-indigo-400" />
-                        </button>
                         <button
                           id={`table-edit-${preset.id}`}
                           onClick={() => onEditPreset(preset)}

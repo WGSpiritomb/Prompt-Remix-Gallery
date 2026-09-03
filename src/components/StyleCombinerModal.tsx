@@ -8,7 +8,6 @@ import {
   Check,
   Ban,
   Save,
-  Wand2,
   Shuffle,
   Sliders,
   Flame,
@@ -35,7 +34,6 @@ interface StyleCombinerModalProps {
   initialStyleB?: StylePreset | null;
   onSaveCombinedPreset: (preset: StylePreset) => void;
   onRecordCombination: (styleA: StylePreset, styleB: StylePreset, mode: BlendMode) => void;
-  onTestInSandbox: (preset: StylePreset) => void;
   onOpenGuide?: () => void;
   onCopyText: (text: string, label: string) => void;
 }
@@ -57,7 +55,6 @@ export function StyleCombinerModal({
   initialStyleB,
   onSaveCombinedPreset,
   onRecordCombination,
-  onTestInSandbox,
   onOpenGuide,
   onCopyText,
 }: StyleCombinerModalProps) {
@@ -197,18 +194,6 @@ export function StyleCombinerModal({
     onRecordCombination(styleA, styleB, blendMode);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
-  };
-
-  const handleTestInSandboxClick = () => {
-    const tempPreset: StylePreset = createCombinedPreset(styleA, styleB, customPresetName, {
-      mode: blendMode,
-      weightA,
-      weightB,
-      stepRatio,
-    });
-    onRecordCombination(styleA, styleB, blendMode);
-    onClose();
-    onTestInSandbox(tempPreset);
   };
 
   return (
@@ -775,16 +760,6 @@ export function StyleCombinerModal({
           </p>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <button
-              type="button"
-              id="combiner-test-sandbox-btn"
-              onClick={handleTestInSandboxClick}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-            >
-              <Wand2 className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Test in Sandbox</span>
-            </button>
-
             <button
               type="button"
               id="combiner-copy-full-btn"

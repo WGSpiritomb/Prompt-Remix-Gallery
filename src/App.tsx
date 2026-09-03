@@ -15,7 +15,6 @@ import { LeaderboardPanel } from './components/LeaderboardPanel';
 import { StyleModal } from './components/StyleModal';
 import { ImportModal } from './components/ImportModal';
 import { LightboxModal } from './components/LightboxModal';
-import { PromptSandboxModal } from './components/PromptSandboxModal';
 import { StyleCombinerModal } from './components/StyleCombinerModal';
 import { StyleCreatorModal } from './components/StyleCreatorModal';
 import { HowToCombineModal } from './components/HowToCombineModal';
@@ -86,8 +85,6 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [lightboxPreset, setLightboxPreset] = useState<StylePreset | null>(null);
-  const [isSandboxOpen, setIsSandboxOpen] = useState(false);
-  const [sandboxPreset, setSandboxPreset] = useState<StylePreset | null>(null);
 
   // Combiner Studio Modal State
   const [isCombinerOpen, setIsCombinerOpen] = useState(false);
@@ -328,8 +325,10 @@ export default function App() {
   const handleDeletePreset = (id: string) => {
     const target = presets.find((p) => p.id === id);
     setPresets((prev) => prev.filter((p) => p.id !== id));
+    if (fusionSlotA?.id === id) setFusionSlotA(null);
+    if (fusionSlotB?.id === id) setFusionSlotB(null);
     showToast(
-      'Preset Deleted',
+      target?.isCombined ? 'Mix Deleted' : 'Preset Deleted',
       target ? `Removed "${target.name}"` : 'Preset removed',
       'info'
     );
@@ -425,15 +424,6 @@ export default function App() {
   const handleOpenLightbox = (preset: StylePreset) => {
     setLightboxPreset(preset);
     setIsLightboxOpen(true);
-  };
-
-  const handleOpenSandbox = (preset?: StylePreset) => {
-    if (preset) {
-      setSandboxPreset(preset);
-    } else if (presets.length > 0) {
-      setSandboxPreset(presets[0]);
-    }
-    setIsSandboxOpen(true);
   };
 
   // --- Filtering & Sorting Compute ---
@@ -556,7 +546,6 @@ export default function App() {
         onToggleLeaderboard={() => setShowLeaderboard(!showLeaderboard)}
         onOpenAddModal={handleOpenAddModal}
         onOpenImportModal={() => setIsImportModalOpen(true)}
-        onOpenSandboxModal={() => handleOpenSandbox()}
         onOpenCombinerModal={() => handleOpenCombiner()}
         onOpenStyleCreatorModal={() => setIsStyleCreatorOpen(true)}
         onOpenGuideModal={() => setIsGuideOpen(true)}
@@ -608,7 +597,6 @@ export default function App() {
                 onToggleFavorite={handleToggleFavorite}
                 onSelectArtist={(artist) => setSelectedArtist(artist)}
                 onSelectTag={(tag) => setSelectedTag(tag)}
-                onTestInSandbox={handleOpenSandbox}
                 onOpenCombiner={(preset) => handleOpenCombiner(preset, null)}
                 onToggleSelectForFusion={handleToggleSelectForFusion}
                 onCopyText={handleCopyText}
@@ -623,7 +611,6 @@ export default function App() {
                 onToggleFavorite={handleToggleFavorite}
                 onSelectArtist={(artist) => setSelectedArtist(artist)}
                 onSelectTag={(tag) => setSelectedTag(tag)}
-                onTestInSandbox={handleOpenSandbox}
                 onOpenCombiner={(preset) => handleOpenCombiner(preset, null)}
                 onOpenCombinerWithPair={(a, b) => handleOpenCombiner(a, b)}
                 onCopyText={handleCopyText}
@@ -694,18 +681,9 @@ export default function App() {
         presetsList={filteredAndSortedPresets}
         onSelectPreset={setLightboxPreset}
         onEditPreset={handleOpenEditModal}
+        onDeletePreset={handleDeletePreset}
         onToggleFavorite={handleToggleFavorite}
-        onTestInSandbox={handleOpenSandbox}
         onOpenCombiner={(preset) => handleOpenCombiner(preset, null)}
-        onCopyText={handleCopyText}
-      />
-
-      <PromptSandboxModal
-        isOpen={isSandboxOpen}
-        onClose={() => setIsSandboxOpen(false)}
-        preset={sandboxPreset}
-        presets={presets}
-        onSelectPreset={setSandboxPreset}
         onCopyText={handleCopyText}
       />
 
@@ -717,7 +695,6 @@ export default function App() {
         initialStyleA={combinerStyleA}
         initialStyleB={combinerStyleB}
         onSaveCombinedPreset={handleSaveCombinedPreset}
-        onTestInSandbox={handleOpenSandbox}
         onRecordCombination={handleRecordCombination}
         onOpenGuide={() => setIsGuideOpen(true)}
         onCopyText={handleCopyText}
@@ -729,7 +706,6 @@ export default function App() {
         onClose={() => setIsStyleCreatorOpen(false)}
         presets={presets}
         onSavePreset={handleSavePreset}
-        onTestInSandbox={handleOpenSandbox}
         onCopyText={handleCopyText}
       />
 

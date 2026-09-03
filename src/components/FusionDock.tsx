@@ -40,67 +40,58 @@ export function FusionDock({
   const hasAnySelected = Boolean(styleA || styleB);
   const hasBothSelected = Boolean(styleA && styleB);
 
+  // If no styles are selected, keep screen completely clean and uncluttered
+  if (!hasAnySelected) {
+    return null;
+  }
+
   return (
     <aside
       aria-label="Style fusion dock"
       className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-3xl transition-all duration-300"
     >
-      <div className="bg-[#161b22]/95 backdrop-blur-xl border-2 border-indigo-500/40 rounded-2xl p-3 shadow-2xl shadow-black/80 ring-1 ring-white/10">
-        <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-800/80">
+      <div className="bg-black/95 backdrop-blur-xl border border-zinc-800 rounded-2xl p-3 shadow-2xl shadow-black ring-1 ring-white/10">
+        <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-zinc-800">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-md shadow-indigo-900/50">
+            <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-purple-400">
               <Layers className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                  Style Fusion Combiner
+                  Mix 2 Styles
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-800">
-                    2-in-1 Blend
+                    Active
                   </span>
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                {!hasAnySelected
-                  ? 'Click "+ Combine" on any 2 style cards below or click Randomize'
-                  : !hasBothSelected
-                  ? '1 style selected! Now pick Style B below or open Studio'
-                  : '✨ 2 styles ready! Click "Blend Styles Now" to preview and save'}
+              <p className="text-[11px] text-zinc-400">
+                {!hasBothSelected
+                  ? '1 style selected. Click "+ Blend" on another card or open combiner'
+                  : '2 styles selected. Click "Mix Styles Now" to view result'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
-              id="dock-guide-btn"
-              onClick={onOpenGuide}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-indigo-300 hover:text-indigo-200 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-700/50 transition-colors"
-              title="How combining works"
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">How to Combine?</span>
-            </button>
-
-            <button
               id="dock-random-btn"
               onClick={onRandomizePair}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
               title="Pick 2 random styles to blend"
             >
               <Shuffle className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Random Pair</span>
             </button>
 
-            {hasAnySelected && (
-              <button
-                id="dock-clear-all-btn"
-                onClick={onClearAll}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors text-xs"
-                title="Clear selected styles"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              id="dock-clear-all-btn"
+              onClick={onClearAll}
+              className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-colors text-xs"
+              title="Close and clear selection"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
