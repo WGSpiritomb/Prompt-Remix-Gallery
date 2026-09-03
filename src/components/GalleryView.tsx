@@ -103,16 +103,16 @@ export function GalleryView({
           <div
             key={preset.id}
             id={`preset-card-${preset.id}`}
-            className={`group flex flex-col bg-[#161b22] rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 border ${
+            className={`group flex flex-col liquid-glass-card rounded-2xl overflow-hidden transition-all duration-200 ${
               isSelectedA
                 ? 'border-indigo-500 ring-2 ring-indigo-500/40 shadow-indigo-950/50'
                 : isSelectedB
                 ? 'border-purple-500 ring-2 ring-purple-500/40 shadow-purple-950/50'
-                : 'border-slate-800 hover:border-indigo-500/50'
+                : 'border-white/[0.08] hover:border-indigo-500/40'
             }`}
           >
             {/* Thumbnail Header with Lightbox Trigger & Overlays */}
-            <div className="relative aspect-[16/10] w-full bg-[#0f1117] overflow-hidden">
+            <div className="relative aspect-[16/10] w-full bg-[#0b0f17] overflow-hidden">
               <ImageWithFallback
                 src={preset.image_url}
                 alt={preset.name}
@@ -124,7 +124,7 @@ export function GalleryView({
               />
 
               {/* Top Controls Overlay */}
-              <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
+              <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
                 {/* Favorite Star Button & Badges */}
                 <div className="flex items-center gap-1.5 pointer-events-auto">
                   <button
@@ -133,10 +133,10 @@ export function GalleryView({
                       e.stopPropagation();
                       onToggleFavorite(preset.id);
                     }}
-                    className={`p-1.5 rounded-lg backdrop-blur-md transition-all ${
+                    className={`p-1.5 rounded-xl liquid-glass-pill transition-all ${
                       preset.favorite
-                        ? 'bg-amber-500/90 text-slate-950 shadow-md shadow-amber-950/50'
-                        : 'bg-[#0f1117]/80 hover:bg-slate-800 text-slate-300 border border-slate-700'
+                        ? 'bg-amber-500/90 text-slate-950 shadow-md shadow-amber-950/50 border-amber-400'
+                        : 'text-slate-300 hover:text-white'
                     }`}
                     title={preset.favorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
@@ -144,19 +144,19 @@ export function GalleryView({
                   </button>
 
                   {isSelectedA && (
-                    <span className="text-[9px] font-mono uppercase font-bold px-1.5 py-0.5 rounded bg-indigo-600 text-white shadow-md">
+                    <span className="text-[9px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white shadow-md">
                       Style A
                     </span>
                   )}
 
                   {isSelectedB && (
-                    <span className="text-[9px] font-mono uppercase font-bold px-1.5 py-0.5 rounded bg-purple-600 text-white shadow-md">
+                    <span className="text-[9px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white shadow-md">
                       Style B
                     </span>
                   )}
 
                   {preset.isCombined && (
-                    <span className="text-[9px] font-mono uppercase font-bold px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-700/60 backdrop-blur-md">
+                    <span className="text-[9px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 backdrop-blur-md">
                       Fusion
                     </span>
                   )}
@@ -171,10 +171,10 @@ export function GalleryView({
                         e.stopPropagation();
                         onToggleSelectForFusion(preset);
                       }}
-                      className={`p-1.5 rounded-lg backdrop-blur-md transition-all ${
+                      className={`p-1.5 rounded-xl liquid-glass-pill transition-all ${
                         isSelectedForFusion
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-[#0f1117]/80 hover:bg-indigo-950 text-indigo-300 hover:text-indigo-200 border border-slate-700'
+                          ? 'bg-indigo-600 text-white border-indigo-400'
+                          : 'text-indigo-300 hover:text-white'
                       }`}
                       title={isSelectedForFusion ? 'Remove from blend' : 'Add to 2-Style Blend'}
                     >
@@ -188,7 +188,7 @@ export function GalleryView({
                       e.stopPropagation();
                       onOpenLightbox(preset);
                     }}
-                    className="p-1.5 rounded-lg bg-[#0f1117]/80 hover:bg-slate-800 text-slate-300 border border-slate-700 backdrop-blur-md transition-colors"
+                    className="p-1.5 rounded-xl liquid-glass-pill text-slate-300 hover:text-white transition-colors"
                     title="Open Fullscreen Lightbox"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
@@ -201,7 +201,7 @@ export function GalleryView({
                         e.stopPropagation();
                         setMenuOpenId(isMenuOpen ? null : preset.id);
                       }}
-                      className="p-1.5 rounded-lg bg-[#0f1117]/80 hover:bg-slate-800 text-slate-300 border border-slate-700 backdrop-blur-md transition-colors"
+                      className="p-1.5 rounded-xl liquid-glass-pill text-slate-300 hover:text-white transition-colors"
                     >
                       <MoreVertical className="w-3.5 h-3.5" />
                     </button>
@@ -209,7 +209,7 @@ export function GalleryView({
                     {/* Context Dropdown Menu */}
                     {isMenuOpen && (
                       <div
-                        className="absolute right-0 mt-1.5 w-44 bg-[#161b22] border border-slate-800 rounded-xl shadow-2xl p-1 z-30 animate-in fade-in zoom-in-95"
+                        className="absolute right-0 mt-1.5 w-44 liquid-glass-modal rounded-xl shadow-2xl p-1 z-30 animate-in fade-in zoom-in-95"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {onOpenCombiner && (

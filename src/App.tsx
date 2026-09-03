@@ -17,6 +17,7 @@ import { ImportModal } from './components/ImportModal';
 import { LightboxModal } from './components/LightboxModal';
 import { PromptSandboxModal } from './components/PromptSandboxModal';
 import { StyleCombinerModal } from './components/StyleCombinerModal';
+import { StyleCreatorModal } from './components/StyleCreatorModal';
 import { HowToCombineModal } from './components/HowToCombineModal';
 import { FusionDock } from './components/FusionDock';
 import { ToastContainer } from './components/Toast';
@@ -93,6 +94,9 @@ export default function App() {
   const [combinerStyleA, setCombinerStyleA] = useState<StylePreset | null>(null);
   const [combinerStyleB, setCombinerStyleB] = useState<StylePreset | null>(null);
 
+  // 3-Artist Style Creator Modal State
+  const [isStyleCreatorOpen, setIsStyleCreatorOpen] = useState(false);
+
   // How to Combine Guide Modal
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
@@ -118,7 +122,7 @@ export default function App() {
     localStorage.setItem(SORT_KEY, sortBy);
   }, [sortBy]);
 
-  // Keyboard shortcuts (C for combiner, ? for guide)
+  // Keyboard shortcuts (C for combiner, S/M for style creator, ? for guide)
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (
@@ -132,6 +136,9 @@ export default function App() {
       if (e.key === 'c' || e.key === 'C') {
         e.preventDefault();
         handleOpenCombiner();
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setIsStyleCreatorOpen(true);
       } else if (e.key === '?') {
         e.preventDefault();
         setIsGuideOpen(true);
@@ -551,6 +558,7 @@ export default function App() {
         onOpenImportModal={() => setIsImportModalOpen(true)}
         onOpenSandboxModal={() => handleOpenSandbox()}
         onOpenCombinerModal={() => handleOpenCombiner()}
+        onOpenStyleCreatorModal={() => setIsStyleCreatorOpen(true)}
         onOpenGuideModal={() => setIsGuideOpen(true)}
         onExportCleanCSV={handleExportCleanCSV}
         onExportExtendedCSV={handleExportExtendedCSV}
@@ -581,6 +589,7 @@ export default function App() {
           filteredCount={filteredAndSortedPresets.length}
           onResetFilters={handleResetFilters}
           onDeleteFilteredCombined={handleDeleteFilteredCombined}
+          onOpenStyleCreator={() => setIsStyleCreatorOpen(true)}
         />
 
         {/* Layout Grid: Main Content + Optional Side Leaderboard */}
@@ -711,6 +720,16 @@ export default function App() {
         onTestInSandbox={handleOpenSandbox}
         onRecordCombination={handleRecordCombination}
         onOpenGuide={() => setIsGuideOpen(true)}
+        onCopyText={handleCopyText}
+      />
+
+      {/* 3-Artist Style Creator Modal */}
+      <StyleCreatorModal
+        isOpen={isStyleCreatorOpen}
+        onClose={() => setIsStyleCreatorOpen(false)}
+        presets={presets}
+        onSavePreset={handleSavePreset}
+        onTestInSandbox={handleOpenSandbox}
         onCopyText={handleCopyText}
       />
 

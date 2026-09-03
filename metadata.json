@@ -1,6 +1,6 @@
 {
   "name": "Remix Prompt Styles Studio",
-  "description": "AI art prompt preset manager and styles.csv editor with 2-style fusion combiner, synergy leaderboards, smart artist extraction, and sandbox preview.",
+  "description": "Liquid glass AI prompt styles studio featuring a 3-artist style creator, clean prompt mixing, preset management, synergy leaderboards, and CSV export.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

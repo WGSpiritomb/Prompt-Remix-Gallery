@@ -392,3 +392,178 @@ export function resetStyleCombineCount(
 export function resetAllCombineCounts(presets: StylePreset[]): StylePreset[] {
   return presets.map((p) => ({ ...p, combineCount: 0 }));
 }
+
+/**
+ * Clean artist token name for clean display and prompt building
+ */
+export function formatArtistForPrompt(artist: string): string {
+  const trimmed = artist.trim();
+  if (trimmed.startsWith('@')) {
+    return trimmed;
+  }
+  return trimmed.replace(/^(?:art\s+by|painted\s+by|drawn\s+by|by)\s+/i, '').trim();
+}
+
+/**
+ * Extract clean short name for preset naming
+ */
+export function getShortArtistName(artist: string): string {
+  const clean = formatArtistForPrompt(artist);
+  if (clean.startsWith('@')) {
+    // e.g. @nyaru (nyaru 4126) -> Nyaru
+    const match = clean.match(/^@([a-zA-Z0-9_\-]+)/);
+    if (match) {
+      const handle = match[1];
+      return handle.charAt(0).toUpperCase() + handle.slice(1);
+    }
+  }
+  // If "Greg Rutkowski" -> "Rutkowski" or "Greg Rutkowski"
+  const parts = clean.split(/\s+/);
+  if (parts.length > 1) {
+    return parts[parts.length - 1]; // Last name
+  }
+  return clean;
+}
+
+/**
+ * Pick a single random artist from the pool, avoiding exclusions
+ */
+export function pickSingleRandomArtist(allArtists: string[], exclude: string[] = []): string {
+  const excludeSet = new Set(exclude.map((e) => e.toLowerCase().trim()));
+  const candidates = allArtists.filter((a) => !excludeSet.has(a.toLowerCase().trim()));
+  const pool = candidates.length > 0 ? candidates : allArtists;
+  if (pool.length === 0) return 'Greg Rutkowski';
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * Pick 3 distinct random artists from available unique pool
+ */
+export function pickThreeRandomArtists(
+  allArtists: string[],
+  locked: (string | null)[] = [null, null, null]
+): [string, string, string] {
+  const selected: [string, string, string] = [
+    locked[0] || '',
+    locked[1] || '',
+    locked[2] || '',
+  ];
+
+  const currentPicked = new Set<string>();
+  if (locked[0]) currentPicked.add(locked[0].toLowerCase().trim());
+  if (locked[1]) currentPicked.add(locked[1].toLowerCase().trim());
+  if (locked[2]) currentPicked.add(locked[2].toLowerCase().trim());
+
+  for (let i = 0; i < 3; i++) {
+    if (!selected[i]) {
+      const candidates = allArtists.filter(
+        (a) => !currentPicked.has(a.toLowerCase().trim())
+      );
+      const chosen = pickSingleRandomArtist(candidates.length > 0 ? candidates : allArtists);
+      selected[i] = chosen;
+      currentPicked.add(chosen.toLowerCase().trim());
+    }
+  }
+
+  return selected;
+}
+
+export type ThreeArtistBlendMode = 'clean' | 'weighted' | 'alternating' | 'art_by';
+
+export interface ThreeArtistMixConfig {
+  artists: [string, string, string];
+  mode?: ThreeArtistBlendMode;
+  weights?: [number, number, number];
+  subject?: string;
+  qualityBoost?: boolean;
+}
+
+/**
+ * Generates the positive prompt for a 3-artist mix.
+ * NEVER starts with '{prompt},'. Pure clean output.
+ */
+export function buildThreeArtistMixPrompt(config: ThreeArtistMixConfig): string {
+  const {
+    artists,
+    mode = 'clean',
+    weights = [1.1, 1.0, 0.9],
+    subject = '',
+    qualityBoost = false,
+  } = config;
+
+  const formattedArtists = artists.map(formatArtistForPrompt);
+
+  let artistSegment = '';
+
+  if (mode === 'weighted') {
+    artistSegment = formattedArtists
+      .map((art, idx) => `(${art}:${weights[idx].toFixed(1)})`)
+      .join(', ');
+  } else if (mode === 'alternating') {
+    artistSegment = `[${formattedArtists[0]} | ${formattedArtists[1]} | ${formattedArtists[2]}]`;
+  } else if (mode === 'art_by') {
+    const allAt = formattedArtists.every((a) => a.startsWith('@'));
+    artistSegment = allAt ? formattedArtists.join(', ') : `art by ${formattedArtists.join(', ')}`;
+  } else {
+    // Default 'clean' mode
+    artistSegment = formattedArtists.join(', ');
+  }
+
+  // Quality boost
+  if (qualityBoost) {
+    artistSegment = `${artistSegment}, masterpiece, highly detailed, sharp focus, 8k resolution`;
+  }
+
+  // Inject subject only if explicitly supplied (never {prompt}, by default!)
+  const cleanSubject = subject.replace(/\{prompt\}/gi, '').trim().replace(/^[,\s]+/, '').replace(/[,\s]+$/, '');
+
+  if (cleanSubject) {
+    return `${cleanSubject}, ${artistSegment}`;
+  }
+
+  return artistSegment;
+}
+
+/**
+ * Builds an auto-generated style preset name for 3 artists
+ */
+export function buildThreeArtistPresetName(artists: [string, string, string]): string {
+  const n1 = getShortArtistName(artists[0]);
+  const n2 = getShortArtistName(artists[1]);
+  const n3 = getShortArtistName(artists[2]);
+  return `${n1} + ${n2} + ${n3} Trio Mix`;
+}
+
+/**
+ * Builds a smart negative prompt for 3-artist mix
+ */
+export function buildThreeArtistNegativePrompt(
+  presets: StylePreset[],
+  artists: [string, string, string]
+): string {
+  const matchedNegatives: string[] = [];
+
+  for (const art of artists) {
+    const lower = art.toLowerCase();
+    const match = presets.find(
+      (p) =>
+        p.name.toLowerCase().includes(lower) ||
+        p.prompt.toLowerCase().includes(lower) ||
+        (p.derivedArtists && p.derivedArtists.some((da) => da.toLowerCase() === lower))
+    );
+    if (match && match.negative_prompt) {
+      matchedNegatives.push(match.negative_prompt);
+    }
+  }
+
+  if (matchedNegatives.length > 0) {
+    const tokens = matchedNegatives.flatMap((n) => splitPromptIntoTokens(n));
+    const deduped = deduplicateTokens(tokens);
+    if (deduped.length >= 4) {
+      return deduped.slice(0, 14).join(', ');
+    }
+  }
+
+  return 'blurry, low quality, deformed, bad anatomy, bad hands, watermark, signature, out of focus, duplicate';
+}
+

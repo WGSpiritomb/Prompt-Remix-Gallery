@@ -142,19 +142,39 @@ export function extractArtists(promptText: string): string[] {
 
   const foundArtists = new Set<string>();
 
-  // 1. Explicit pattern matching: by / art by / style of / in the style of
+  // 1. Direct @tag artist tokens (e.g. @nyaru \(nyaru 4126\), @nyaru (nyaru 4126), @cool-kyou shinja)
+  // Preserving any parentheses \(, \), (, ), and backslashes \ exactly as written
+  const chunks = promptText.split(/[,;\n|]+/);
+  for (const rawChunk of chunks) {
+    const chunk = rawChunk.trim();
+    if (chunk.startsWith('@')) {
+      if (chunk.length >= 2 && chunk.length <= 60) {
+        foundArtists.add(chunk);
+      }
+    }
+  }
+
+  // 2. Explicit pattern matching: by / art by / style of / in the style of
+  // Supports parentheses and backslashes inside artist names
   const regexPatterns = [
-    /(?:art\s+by|painted\s+by|drawn\s+by|illustrated\s+by|artwork\s+by)\s+([A-Za-z0-9\s.'’\-]+?)(?=[,;\n|+]|\b(?:in\s+the\s+style|art\s+by|by\b)|$|\()/gi,
-    /(?:in\s+the\s+style\s+of|style\s+of)\s+([A-Za-z0-9\s.'’\-]+?)(?=[,;\n|+]|\b(?:in\s+the\s+style|art\s+by|by\b)|$|\()/gi,
-    /(?:^|[,;\s])by\s+([A-Za-z0-9\s.'’\-]+?)(?=[,;\n|+]|\b(?:in\s+the\s+style|art\s+by|by\b)|$|\()/gi,
-    /@([a-zA-Z0-9_]{3,25})\b/g, // @handle format
+    /(?:art\s+by|painted\s+by|drawn\s+by|illustrated\s+by|artwork\s+by)\s+([A-Za-z0-9\s.'’\\()\-]+?)(?=[,;\n|+]|\b(?:in\s+the\s+style|art\s+by|by\b)|$)/gi,
+    /(?:in\s+the\s+style\s+of|style\s+of)\s+([A-Za-z0-9\s.'’\\()\-]+?)(?=[,;\n|+]|\b(?:in\s+the\s+style|art\s+by|by\b)|$)/gi,
+    /(?:^|[,;\s])by\s+([A-Za-z0-9\s.'’\\()\-]+?)(?=[,;\n|+]|\b(?:in\s+the\s+style|art\s+by|by\b)|$)/gi,
+    /@([a-zA-Z0-9_\-\s\\()]+?)(?=[,;\n|+]|$)/g,
   ];
 
   for (const regex of regexPatterns) {
     let match: RegExpExecArray | null;
     while ((match = regex.exec(promptText)) !== null) {
-      const candidate = match[1]?.trim();
-      if (candidate && candidate.length > 2 && candidate.length < 40) {
+      let candidate = match[1]?.trim();
+      if (candidate && candidate.length > 2 && candidate.length < 60) {
+        // If matched from @group, prefix with @ if not already, keeping \ and () intact
+        if (regex.source.startsWith('@') && !candidate.startsWith('@')) {
+          candidate = `@${candidate}`;
+          foundArtists.add(candidate);
+          continue;
+        }
+
         // Exclude common prompt words that might match "by <word>"
         const lower = candidate.toLowerCase();
         if (
@@ -165,13 +185,18 @@ export function extractArtists(promptText: string): string[] {
           !lower.includes('day') &&
           !lower.includes('far')
         ) {
-          foundArtists.add(titleCase(candidate));
+          // If the candidate contains backslashes or parentheses, preserve its exact casing and characters
+          if (candidate.includes('\\') || candidate.includes('(') || candidate.includes(')')) {
+            foundArtists.add(candidate);
+          } else {
+            foundArtists.add(titleCase(candidate));
+          }
         }
       }
     }
   }
 
-  // 2. Scan for known artist database tokens
+  // 3. Scan for known artist database tokens
   const promptLower = promptText.toLowerCase();
   for (const artist of KNOWN_ARTISTS) {
     const artistLower = artist.toLowerCase();
@@ -183,6 +208,36 @@ export function extractArtists(promptText: string): string[] {
   }
 
   return Array.from(foundArtists);
+}
+
+/**
+ * Returns all unique artists found across all presets in the library.
+ * Seeds with curated known AI artists if fewer than 10 unique artists exist in library.
+ */
+export function getAllUniqueArtists(presets: StylePreset[]): string[] {
+  const uniqueMap = new Map<string, string>(); // lowercase key -> display string
+
+  for (const preset of presets) {
+    const artists = preset.derivedArtists && preset.derivedArtists.length > 0
+      ? preset.derivedArtists
+      : extractArtists(`${preset.name} ${preset.prompt}`);
+
+    for (const a of artists) {
+      const clean = a.trim();
+      if (clean && !uniqueMap.has(clean.toLowerCase())) {
+        uniqueMap.set(clean.toLowerCase(), clean);
+      }
+    }
+  }
+
+  // Ensure rich artist pool by seeding known artists
+  for (const artist of KNOWN_ARTISTS) {
+    if (!uniqueMap.has(artist.toLowerCase())) {
+      uniqueMap.set(artist.toLowerCase(), artist);
+    }
+  }
+
+  return Array.from(uniqueMap.values()).sort((a, b) => a.localeCompare(b));
 }
 
 /**
