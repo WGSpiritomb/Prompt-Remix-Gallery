@@ -384,7 +384,7 @@ export default function App() {
     downloadCSV(csvContent, 'styles.csv');
     showToast(
       'styles.csv Exported',
-      `Strict headers (name,prompt,negative_prompt) for ${presets.length} presets`,
+      `Strict headers (name,prompt,negative_prompt) for ${presets.length} presets sorted A-Z`,
       'success'
     );
   };
@@ -392,7 +392,7 @@ export default function App() {
   const handleExportExtendedCSV = () => {
     const csvContent = exportToExtendedCSV(presets);
     downloadCSV(csvContent, 'styles_with_images.csv');
-    showToast('Extended CSV Exported', 'Includes image_url column', 'success');
+    showToast('Extended CSV Exported', 'Includes image_url column, sorted Name A-Z', 'success');
   };
 
   const handleBulkExport = (selectedPresets: StylePreset[]) => {
@@ -400,14 +400,14 @@ export default function App() {
     downloadCSV(csvContent, 'selected_styles.csv');
     showToast(
       'Selected Presets Exported',
-      `Exported ${selectedPresets.length} presets to CSV`,
+      `Exported ${selectedPresets.length} selected presets sorted Name A-Z`,
       'success'
     );
   };
 
   const handleCopyCSVToClipboard = async () => {
     const csvContent = exportToStrictCSV(presets);
-    await handleCopyText(csvContent, `${presets.length} presets in styles.csv format`);
+    await handleCopyText(csvContent, `${presets.length} presets in styles.csv format (A-Z)`);
   };
 
   // --- Modal Openers ---

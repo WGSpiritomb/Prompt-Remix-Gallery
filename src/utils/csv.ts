@@ -194,12 +194,18 @@ function escapeCSVField(field: string | undefined): string {
 
 /**
  * Strict export function outputting headers: name,prompt,negative_prompt
+ * Always sorts presets alphabetically by Name A-Z.
  */
 export function exportToStrictCSV(presets: StylePreset[]): string {
   const headers = ['name', 'prompt', 'negative_prompt'];
   const lines: string[] = [headers.join(',')];
 
-  for (const preset of presets) {
+  // Always sort alphabetically by Name A-Z
+  const sortedPresets = [...presets].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+  );
+
+  for (const preset of sortedPresets) {
     const name = escapeCSVField(preset.name);
     const prompt = escapeCSVField(preset.prompt);
     const negative = escapeCSVField(preset.negative_prompt);
@@ -211,12 +217,18 @@ export function exportToStrictCSV(presets: StylePreset[]): string {
 
 /**
  * Extended export function that includes image_url if present
+ * Always sorts presets alphabetically by Name A-Z.
  */
 export function exportToExtendedCSV(presets: StylePreset[]): string {
   const headers = ['name', 'prompt', 'negative_prompt', 'image_url'];
   const lines: string[] = [headers.join(',')];
 
-  for (const preset of presets) {
+  // Always sort alphabetically by Name A-Z
+  const sortedPresets = [...presets].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+  );
+
+  for (const preset of sortedPresets) {
     const name = escapeCSVField(preset.name);
     const prompt = escapeCSVField(preset.prompt);
     const negative = escapeCSVField(preset.negative_prompt);

@@ -198,7 +198,7 @@ export function Navbar({
                       Export styles.csv
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      {presets.length} presets formatted
+                      {presets.length} presets • Sorted Name A-Z
                     </p>
                   </div>
 
@@ -213,7 +213,7 @@ export function Navbar({
                     <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
                     <div>
                       <p className="font-medium">Download styles.csv</p>
-                      <p className="text-[10px] text-slate-400">Strict (name, prompt, negative_prompt)</p>
+                      <p className="text-[10px] text-slate-400">Strict (name, prompt, negative_prompt) • A-Z</p>
                     </div>
                   </button>
 
