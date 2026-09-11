@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { getSharedArtists } from '../utils/styleCombiner';
+import { getSharedArtists, isBaseStyleIgnoredForMixing } from '../utils/styleCombiner';
 
 interface FusionDockProps {
   presets: StylePreset[];
@@ -47,6 +47,9 @@ export function FusionDock({
     [styleA, styleB]
   );
   const hasCommonArtist = sharedArtists.length > 0;
+  const isBaseA = isBaseStyleIgnoredForMixing(styleA);
+  const isBaseB = isBaseStyleIgnoredForMixing(styleB);
+  const hasBaseConflict = isBaseA || isBaseB;
 
   // If no styles are selected, keep screen completely clean and uncluttered
   if (!hasAnySelected) {
@@ -70,17 +73,27 @@ export function FusionDock({
                   Mix 2 Styles
                   <span
                     className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
-                      hasCommonArtist
+                      hasBaseConflict
+                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                        : hasCommonArtist
                         ? 'bg-rose-950 text-rose-300 border border-rose-800'
                         : 'bg-purple-950 text-purple-300 border border-purple-800'
                     }`}
                   >
-                    {hasCommonArtist ? 'Common Artist Conflict' : 'Active'}
+                    {hasBaseConflict
+                      ? 'Base Style Excluded'
+                      : hasCommonArtist
+                      ? 'Common Artist Conflict'
+                      : 'Active'}
                   </span>
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400">
-                {hasCommonArtist ? (
+                {hasBaseConflict ? (
+                  <span className="text-amber-400 font-medium">
+                    ⚠️ {isBaseA ? styleA?.name : styleB?.name} is a Base preset with leading numbers and cannot be mixed.
+                  </span>
+                ) : hasCommonArtist ? (
                   <span className="text-rose-400 font-medium">
                     ⚠️ Styles share artist ({sharedArtists.join(', ')}). Styles A & B cannot share artists.
                   </span>
@@ -215,21 +228,28 @@ export function FusionDock({
             <button
               id="open-fusion-studio-btn"
               onClick={() => onOpenCombiner(styleA, styleB)}
-              disabled={hasCommonArtist}
+              disabled={hasCommonArtist || hasBaseConflict}
               title={
-                hasCommonArtist
+                hasBaseConflict
+                  ? 'Cannot blend: Base presets with leading numbers are excluded from mixing'
+                  : hasCommonArtist
                   ? `Cannot blend: Styles share artist (${sharedArtists.join(', ')})`
                   : hasBothSelected
                   ? 'Blend these 2 styles'
                   : 'Open Fusion Studio'
               }
               className={`w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                hasCommonArtist
-                  ? 'bg-rose-950/60 border border-rose-700/60 text-rose-300 cursor-not-allowed opacity-80'
+                hasBaseConflict || hasCommonArtist
+                  ? 'bg-zinc-900 border border-zinc-700 text-zinc-500 cursor-not-allowed opacity-80'
                   : 'text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 shadow-lg shadow-indigo-950/60 hover:scale-[1.02] active:scale-[0.98]'
               }`}
             >
-              {hasCommonArtist ? (
+              {hasBaseConflict ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <span>Cannot Mix (Base Style)</span>
+                </>
+              ) : hasCommonArtist ? (
                 <>
                   <AlertTriangle className="w-4 h-4 text-rose-400" />
                   <span>Cannot Mix (Shared Artist)</span>

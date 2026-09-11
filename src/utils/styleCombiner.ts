@@ -202,20 +202,94 @@ export function haveCommonArtists(
 }
 
 /**
- * Filter presets to find only those compatible with target (i.e. having no common artists)
+ * Checks if a preset is a "Base" style that should be ignored for mixing.
+ * Matches "01-Base" and any mix name containing "Base" with numbers in the front
+ * (e.g., "01-Base", "01 - Base", "02_Base", "1-Base", "[01] Base", etc.).
+ */
+export function isBaseStyleIgnoredForMixing(
+  presetOrName: StylePreset | string | null | undefined
+): boolean {
+  if (!presetOrName) return false;
+  const name = typeof presetOrName === 'string' ? presetOrName : presetOrName.name;
+  if (!name || typeof name !== 'string') return false;
+  const trimmed = name.trim();
+
+  // Must have numbers in the front (e.g., "01", "1", "002", "[01]", "#01", "(01)", "01-")
+  const hasNumbersInFront = /^[\s#[(\-<]*\d+/.test(trimmed);
+  // Must contain "Base" (case-insensitive)
+  const containsBase = /base/i.test(trimmed);
+
+  return hasNumbersInFront && containsBase;
+}
+
+/**
+ * Filter out any presets that should be ignored for mixing (e.g. 01-Base)
+ */
+export function filterMixablePresets(presets: StylePreset[]): StylePreset[] {
+  return presets.filter((p) => !isBaseStyleIgnoredForMixing(p));
+}
+
+/**
+ * Validates whether two styles can be mixed together according to system rules:
+ * 1. Neither style can be a Base style with leading numbers (e.g. 01-Base)
+ * 2. They cannot be the same style
+ * 3. They must not share any derived artists
+ */
+export function canStylesBeMixed(
+  presetA: StylePreset | null | undefined,
+  presetB: StylePreset | null | undefined
+): { canMix: boolean; reason?: string } {
+  if (!presetA || !presetB) {
+    return { canMix: false, reason: 'Please select both Style A and Style B.' };
+  }
+  if (presetA.id && presetB.id && presetA.id === presetB.id) {
+    return { canMix: false, reason: 'Cannot mix a style with itself.' };
+  }
+  if (isBaseStyleIgnoredForMixing(presetA)) {
+    return {
+      canMix: false,
+      reason: `"${presetA.name}" is a Base style and is ignored for mixing.`,
+    };
+  }
+  if (isBaseStyleIgnoredForMixing(presetB)) {
+    return {
+      canMix: false,
+      reason: `"${presetB.name}" is a Base style and is ignored for mixing.`,
+    };
+  }
+  const shared = getSharedArtists(presetA, presetB);
+  if (shared.length > 0) {
+    return {
+      canMix: false,
+      reason: `Styles share common artist (${shared.join(', ')}). Styles A and B cannot share artists.`,
+    };
+  }
+  return { canMix: true };
+}
+
+/**
+ * Filter presets to find only those compatible with target (i.e. having no common artists and not ignored Base styles)
  */
 export function getCompatibleStylesFor(target: StylePreset, presets: StylePreset[]): StylePreset[] {
-  return presets.filter((p) => p.id !== target.id && !haveCommonArtists(target, p));
+  if (isBaseStyleIgnoredForMixing(target)) return [];
+  return presets.filter(
+    (p) =>
+      p.id !== target.id &&
+      !isBaseStyleIgnoredForMixing(p) &&
+      !haveCommonArtists(target, p)
+  );
 }
 
 /**
  * Finds a random compatible pair from a list of presets where style A and style B have NO common artists
+ * and neither is an ignored Base style.
  */
 export function findRandomCompatiblePair(presets: StylePreset[]): [StylePreset, StylePreset] | null {
-  if (presets.length < 2) return null;
-  const shuffledA = [...presets].sort(() => Math.random() - 0.5);
+  const mixable = filterMixablePresets(presets);
+  if (mixable.length < 2) return null;
+  const shuffledA = [...mixable].sort(() => Math.random() - 0.5);
   for (const a of shuffledA) {
-    const compatible = presets.filter((b) => b.id !== a.id && !haveCommonArtists(a, b));
+    const compatible = mixable.filter((b) => b.id !== a.id && !haveCommonArtists(a, b));
     if (compatible.length > 0) {
       const randomB = compatible[Math.floor(Math.random() * compatible.length)];
       return [a, randomB];
@@ -324,6 +398,16 @@ export function createCombinedPreset(
   customName?: string,
   options: CombineOptions = { mode: 'smart' }
 ): StylePreset {
+  if (isBaseStyleIgnoredForMixing(styleA)) {
+    throw new Error(
+      `Cannot combine styles: "${styleA.name}" is a Base style and is ignored for mixing.`
+    );
+  }
+  if (isBaseStyleIgnoredForMixing(styleB)) {
+    throw new Error(
+      `Cannot combine styles: "${styleB.name}" is a Base style and is ignored for mixing.`
+    );
+  }
   if (haveCommonArtists(styleA, styleB)) {
     const shared = getSharedArtists(styleA, styleB);
     throw new Error(

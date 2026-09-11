@@ -34,6 +34,8 @@ import {
   getSharedArtists,
   getCompatibleStylesFor,
   findRandomCompatiblePair,
+  isBaseStyleIgnoredForMixing,
+  filterMixablePresets,
 } from './utils/styleCombiner';
 
 const STORAGE_KEY = 'prompt_styles_studio_presets_v1';
@@ -179,20 +181,47 @@ export default function App() {
     }
   };
 
+  // Clean up any Base styles from fusion slots if loaded from stale storage
+  useEffect(() => {
+    if (fusionSlotA && isBaseStyleIgnoredForMixing(fusionSlotA)) {
+      setFusionSlotA(null);
+    }
+    if (fusionSlotB && isBaseStyleIgnoredForMixing(fusionSlotB)) {
+      setFusionSlotB(null);
+    }
+  }, [fusionSlotA, fusionSlotB]);
+
   // --- Fusion & Combiner Handlers ---
   const handleOpenCombiner = (styleA?: StylePreset | null, styleB?: StylePreset | null) => {
-    let initialA = styleA || fusionSlotA || presets[0] || null;
-    let initialB = styleB || fusionSlotB || null;
+    // If the specifically requested style is a Base preset, prevent opening with it
+    if (styleA && isBaseStyleIgnoredForMixing(styleA)) {
+      showToast(
+        'Base Style Ignored for Mixing',
+        `"${styleA.name}" is a Base style and cannot be used for mixing.`,
+        'warning'
+      );
+      return;
+    }
+
+    const mixablePresets = filterMixablePresets(presets);
+    if (mixablePresets.length === 0) {
+      showToast('No Mixable Styles', 'No valid non-Base styles available to mix.', 'warning');
+      return;
+    }
+
+    let initialA =
+      (styleA && !isBaseStyleIgnoredForMixing(styleA) ? styleA : null) ||
+      (fusionSlotA && !isBaseStyleIgnoredForMixing(fusionSlotA) ? fusionSlotA : null) ||
+      mixablePresets[0] ||
+      null;
+
+    let initialB = styleB && !isBaseStyleIgnoredForMixing(styleB) ? styleB : fusionSlotB && !isBaseStyleIgnoredForMixing(fusionSlotB) ? fusionSlotB : null;
 
     if (initialA) {
-      // Ensure initialB has no common artist with initialA
-      if (!initialB || initialB.id === initialA.id || haveCommonArtists(initialA, initialB)) {
+      // Ensure initialB has no common artist with initialA and is not a base style
+      if (!initialB || initialB.id === initialA.id || haveCommonArtists(initialA, initialB) || isBaseStyleIgnoredForMixing(initialB)) {
         const compatibleList = getCompatibleStylesFor(initialA, presets);
-        initialB =
-          compatibleList[0] ||
-          presets.find((p) => p.id !== initialA?.id && !haveCommonArtists(initialA, p)) ||
-          presets.find((p) => p.id !== initialA?.id) ||
-          null;
+        initialB = compatibleList[0] || mixablePresets.find((p) => p.id !== initialA?.id) || null;
       }
     }
 
@@ -203,6 +232,17 @@ export default function App() {
 
   const handleToggleSelectForFusion = (preset: StylePreset) => {
     if (!preset) return;
+
+    // Strict rule: ignore 01-Base and any style containing "Base" with numbers in the front
+    if (isBaseStyleIgnoredForMixing(preset)) {
+      showToast(
+        'Base Style Ignored for Mixing',
+        `"${preset.name}" is a Base template with leading numbers and is excluded from style mixing.`,
+        'warning'
+      );
+      return;
+    }
+
     if (fusionSlotA?.id === preset.id) {
       setFusionSlotA(null);
       showToast('Removed from Slot A', preset.name, 'info');
@@ -257,15 +297,19 @@ export default function App() {
   };
 
   const handleRandomizeFusionPair = () => {
-    if (presets.length < 2) return;
-    const compatiblePair = findRandomCompatiblePair(presets);
+    const mixable = filterMixablePresets(presets);
+    if (mixable.length < 2) {
+      showToast('Not Enough Mixable Styles', 'Need at least 2 non-Base styles to mix.', 'warning');
+      return;
+    }
+    const compatiblePair = findRandomCompatiblePair(mixable);
     if (compatiblePair) {
       const [a, b] = compatiblePair;
       setFusionSlotA(a);
       setFusionSlotB(b);
       showToast('Distinct Pair Selected', `${a.name} + ${b.name} (no shared artists)`, 'info');
     } else {
-      showToast('No Compatible Pair', 'All styles share overlapping artists.', 'error');
+      showToast('No Compatible Pair', 'Could not find a compatible pair without shared artists.', 'error');
     }
   };
 

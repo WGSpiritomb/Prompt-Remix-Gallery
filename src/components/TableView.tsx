@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { haveCommonArtists, getSharedArtists } from '../utils/styleCombiner';
+import { haveCommonArtists, getSharedArtists, isBaseStyleIgnoredForMixing } from '../utils/styleCombiner';
 
 interface TableViewProps {
   presets: StylePreset[];
@@ -117,6 +117,7 @@ export function TableView({
             {selectedIds.size === 2 && onOpenCombinerWithPair && (() => {
               const selectedArr = presets.filter((p) => selectedIds.has(p.id));
               if (selectedArr.length !== 2) return null;
+              const hasBaseConflict = selectedArr.some(isBaseStyleIgnoredForMixing);
               const hasConflict = haveCommonArtists(selectedArr[0], selectedArr[1]);
               const conflictArtists = hasConflict
                 ? getSharedArtists(selectedArr[0], selectedArr[1])
@@ -126,22 +127,29 @@ export function TableView({
                 <button
                   id="bulk-blend-selected-btn"
                   onClick={() => {
-                    if (hasConflict) return;
+                    if (hasConflict || hasBaseConflict) return;
                     onOpenCombinerWithPair(selectedArr[0], selectedArr[1]);
                   }}
-                  disabled={hasConflict}
+                  disabled={hasConflict || hasBaseConflict}
                   className={`flex items-center gap-1.5 px-3 py-1 rounded font-bold transition-all ${
-                    hasConflict
+                    hasConflict || hasBaseConflict
                       ? 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed opacity-70'
                       : 'bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-950/50 border border-purple-400/30 hover:scale-105'
                   }`}
                   title={
-                    hasConflict
+                    hasBaseConflict
+                      ? 'Cannot blend: Base styles with leading numbers are excluded from mixing'
+                      : hasConflict
                       ? `Cannot blend: Styles share artist (${conflictArtists.join(', ')})`
                       : 'Blend these 2 selected styles together'
                   }
                 >
-                  {hasConflict ? (
+                  {hasBaseConflict ? (
+                    <>
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Cannot Mix (Base Style)</span>
+                    </>
+                  ) : hasConflict ? (
                     <>
                       <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
                       <span>Cannot Mix (Shared Artist)</span>
@@ -368,7 +376,7 @@ export function TableView({
                     {/* Action Buttons */}
                     <td className="py-2.5 px-3 text-right font-sans">
                       <div className="flex items-center justify-end gap-1">
-                        {onOpenCombiner && (
+                        {onOpenCombiner && !isBaseStyleIgnoredForMixing(preset) && (
                           <button
                             id={`table-combine-${preset.id}`}
                             onClick={() => onOpenCombiner(preset)}
