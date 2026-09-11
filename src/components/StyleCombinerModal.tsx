@@ -16,12 +16,17 @@ import {
   Tag,
   ArrowRight,
   Info,
+  AlertTriangle,
 } from 'lucide-react';
 import { StylePreset, BlendMode } from '../types';
 import {
   combinePositivePrompts,
   mergeNegativePrompts,
   createCombinedPreset,
+  haveCommonArtists,
+  getSharedArtists,
+  getCompatibleStylesFor,
+  findRandomCompatiblePair,
 } from '../utils/styleCombiner';
 import { ImageWithFallback } from './ArtworkPlaceholder';
 import { extractArtists, extractAestheticTags } from '../utils/tagExtractor';
@@ -76,17 +81,19 @@ export function StyleCombinerModal({
   useEffect(() => {
     if (!isOpen || presets.length === 0) return;
 
-    if (initialStyleA) {
-      setStyleAId(initialStyleA.id);
-    } else if (!styleAId || !presets.some((p) => p.id === styleAId)) {
-      setStyleAId(presets[0]?.id || '');
-    }
+    const targetA =
+      initialStyleA || presets.find((p) => p.id === styleAId) || presets[0];
+    if (targetA) {
+      setStyleAId(targetA.id);
 
-    if (initialStyleB) {
-      setStyleBId(initialStyleB.id);
-    } else if (!styleBId || styleBId === (initialStyleA?.id || presets[0]?.id)) {
-      const secondChoice = presets.find((p) => p.id !== (initialStyleA?.id || presets[0]?.id));
-      setStyleBId(secondChoice ? secondChoice.id : presets[0]?.id || '');
+      let targetB = initialStyleB;
+      if (!targetB || targetB.id === targetA.id || haveCommonArtists(targetA, targetB)) {
+        const compatible = getCompatibleStylesFor(targetA, presets);
+        targetB = compatible[0] || presets.find((p) => p.id !== targetA.id) || null;
+      }
+      if (targetB) {
+        setStyleBId(targetB.id);
+      }
     }
 
     setSavedSuccess(false);
@@ -101,11 +108,19 @@ export function StyleCombinerModal({
   const styleB = useMemo(
     () =>
       presets.find((p) => p.id === styleBId) ||
+      presets.find((p) => p.id !== styleAId && !haveCommonArtists(styleA, p)) ||
       presets.find((p) => p.id !== styleAId) ||
       presets[1] ||
       null,
-    [presets, styleBId, styleAId]
+    [presets, styleBId, styleAId, styleA]
   );
+
+  // Common artist analysis between Style A and Style B
+  const sharedArtists = useMemo(
+    () => getSharedArtists(styleA, styleB),
+    [styleA, styleB]
+  );
+  const hasCommonArtist = sharedArtists.length > 0;
 
   // Auto-generate suggested name when styles change
   useEffect(() => {
@@ -149,16 +164,27 @@ export function StyleCombinerModal({
     setStyleBId(tempA);
   };
 
-  // Pick a random pair of styles
+  // Change Style A with smart auto-switch for Style B if it would create an artist conflict
+  const handleSelectStyleA = (newAId: string) => {
+    setStyleAId(newAId);
+    const newA = presets.find((p) => p.id === newAId);
+    if (newA && styleB && (newA.id === styleB.id || haveCommonArtists(newA, styleB))) {
+      const compatible = getCompatibleStylesFor(newA, presets);
+      if (compatible.length > 0) {
+        setStyleBId(compatible[0].id);
+      }
+    }
+  };
+
+  // Pick a random pair of styles that share NO common artists
   const handleRandomPair = () => {
     if (presets.length < 2) return;
-    const idxA = Math.floor(Math.random() * presets.length);
-    let idxB = Math.floor(Math.random() * presets.length);
-    while (idxB === idxA && presets.length > 1) {
-      idxB = Math.floor(Math.random() * presets.length);
+    const compatiblePair = findRandomCompatiblePair(presets);
+    if (compatiblePair) {
+      const [a, b] = compatiblePair;
+      setStyleAId(a.id);
+      setStyleBId(b.id);
     }
-    setStyleAId(presets[idxA].id);
-    setStyleBId(presets[idxB].id);
   };
 
   const handleCopyPositive = () => {
@@ -183,6 +209,9 @@ export function StyleCombinerModal({
   };
 
   const handleSaveAsPreset = () => {
+    if (hasCommonArtist) {
+      return;
+    }
     const newPreset = createCombinedPreset(styleA, styleB, customPresetName, {
       mode: blendMode,
       weightA,
@@ -283,7 +312,7 @@ export function StyleCombinerModal({
               <select
                 id="select-style-a"
                 value={styleAId}
-                onChange={(e) => setStyleAId(e.target.value)}
+                onChange={(e) => handleSelectStyleA(e.target.value)}
                 aria-label="Select Style Blueprint A"
                 className="w-full px-2.5 py-1.5 bg-[#161b22] border border-slate-700 rounded-lg text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer mb-2.5"
               >
@@ -362,11 +391,30 @@ export function StyleCombinerModal({
                 aria-label="Select Style Blueprint B"
                 className="w-full px-2.5 py-1.5 bg-[#161b22] border border-slate-700 rounded-lg text-xs font-semibold text-slate-200 focus:outline-none focus:border-purple-500 cursor-pointer mb-2.5"
               >
-                {presets.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-[#161b22] text-slate-200">
-                    {p.name}
-                  </option>
-                ))}
+                {presets.map((p) => {
+                  const isSame = p.id === styleA.id;
+                  const conflicts = !isSame && haveCommonArtists(styleA, p);
+                  const conflictArtists = conflicts ? getSharedArtists(styleA, p) : [];
+                  return (
+                    <option
+                      key={p.id}
+                      value={p.id}
+                      disabled={isSame || conflicts}
+                      className={
+                        conflicts || isSame
+                          ? 'text-zinc-500 bg-zinc-900'
+                          : 'bg-[#161b22] text-slate-200'
+                      }
+                    >
+                      {p.name}
+                      {isSame
+                        ? ' (Current Style A)'
+                        : conflicts
+                        ? ` — Incompatible (Shares: ${conflictArtists.join(', ')})`
+                        : ''}
+                    </option>
+                  );
+                })}
               </select>
 
               {/* Visual Preview of Style B */}
@@ -404,6 +452,27 @@ export function StyleCombinerModal({
               )}
             </div>
           </div>
+
+          {/* Common Artist Conflict Alert Banner */}
+          {hasCommonArtist && (
+            <div
+              id="combiner-common-artist-alert"
+              className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-200 animate-in fade-in shadow-lg"
+            >
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-rose-200 flex items-center gap-2">
+                  <span>Cannot Mix: Common Artist Detected</span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-rose-900 text-rose-200 border border-rose-700">
+                    {sharedArtists.join(', ')}
+                  </span>
+                </p>
+                <p className="text-rose-300/80 leading-relaxed">
+                  Style A and Style B must not have any common artist. Please select a different Style B or Style A that does not feature {sharedArtists.join(', ')}.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Fusion Strategy / Blend Mode Selector */}
           <div className="bg-[#0f1117] border border-slate-800 rounded-xl p-3.5 space-y-3">
@@ -731,9 +800,19 @@ export function StyleCombinerModal({
                 id="save-combined-preset-btn"
                 type="button"
                 onClick={handleSaveAsPreset}
+                disabled={hasCommonArtist || !customPresetName.trim() || savedSuccess}
+                title={
+                  hasCommonArtist
+                    ? `Cannot save: Styles share artist (${sharedArtists.join(', ')})`
+                    : !customPresetName.trim()
+                    ? 'Enter a preset name'
+                    : 'Save blended preset to library'
+                }
                 className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
                   savedSuccess
                     ? 'bg-emerald-600 text-white shadow-emerald-950/50'
+                    : hasCommonArtist
+                    ? 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed opacity-60'
                     : 'bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40'
                 }`}
               >
@@ -741,6 +820,11 @@ export function StyleCombinerModal({
                   <>
                     <Check className="w-3.5 h-3.5" />
                     <span>Saved to Styles!</span>
+                  </>
+                ) : hasCommonArtist ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Cannot Mix (Shared Artist)</span>
                   </>
                 ) : (
                   <>

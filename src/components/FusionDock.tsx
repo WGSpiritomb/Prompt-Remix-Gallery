@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Layers,
   Sparkles,
@@ -8,9 +8,11 @@ import {
   HelpCircle,
   Zap,
   Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
+import { getSharedArtists } from '../utils/styleCombiner';
 
 interface FusionDockProps {
   presets: StylePreset[];
@@ -40,6 +42,12 @@ export function FusionDock({
   const hasAnySelected = Boolean(styleA || styleB);
   const hasBothSelected = Boolean(styleA && styleB);
 
+  const sharedArtists = useMemo(
+    () => (styleA && styleB ? getSharedArtists(styleA, styleB) : []),
+    [styleA, styleB]
+  );
+  const hasCommonArtist = sharedArtists.length > 0;
+
   // If no styles are selected, keep screen completely clean and uncluttered
   if (!hasAnySelected) {
     return null;
@@ -60,15 +68,27 @@ export function FusionDock({
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
                   Mix 2 Styles
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-800">
-                    Active
+                  <span
+                    className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
+                      hasCommonArtist
+                        ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                        : 'bg-purple-950 text-purple-300 border border-purple-800'
+                    }`}
+                  >
+                    {hasCommonArtist ? 'Common Artist Conflict' : 'Active'}
                   </span>
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400">
-                {!hasBothSelected
-                  ? '1 style selected. Click "+ Blend" on another card or open combiner'
-                  : '2 styles selected. Click "Mix Styles Now" to view result'}
+                {hasCommonArtist ? (
+                  <span className="text-rose-400 font-medium">
+                    ⚠️ Styles share artist ({sharedArtists.join(', ')}). Styles A & B cannot share artists.
+                  </span>
+                ) : !hasBothSelected ? (
+                  '1 style selected. Click "+ Blend" on another card or open combiner'
+                ) : (
+                  '2 distinct styles selected. Click "Mix Styles Now" to blend'
+                )}
               </p>
             </div>
           </div>
@@ -195,11 +215,32 @@ export function FusionDock({
             <button
               id="open-fusion-studio-btn"
               onClick={() => onOpenCombiner(styleA, styleB)}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 shadow-lg shadow-indigo-950/60 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              disabled={hasCommonArtist}
+              title={
+                hasCommonArtist
+                  ? `Cannot blend: Styles share artist (${sharedArtists.join(', ')})`
+                  : hasBothSelected
+                  ? 'Blend these 2 styles'
+                  : 'Open Fusion Studio'
+              }
+              className={`w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                hasCommonArtist
+                  ? 'bg-rose-950/60 border border-rose-700/60 text-rose-300 cursor-not-allowed opacity-80'
+                  : 'text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 shadow-lg shadow-indigo-950/60 hover:scale-[1.02] active:scale-[0.98]'
+              }`}
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>{hasBothSelected ? 'Blend Styles Now ✨' : 'Open Fusion Studio'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              {hasCommonArtist ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-rose-400" />
+                  <span>Cannot Mix (Shared Artist)</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>{hasBothSelected ? 'Blend Styles Now ✨' : 'Open Fusion Studio'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
             </button>
           </div>
         </div>

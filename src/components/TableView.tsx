@@ -11,9 +11,11 @@ import {
   Download,
   Layers,
   Zap,
+  AlertTriangle,
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
+import { haveCommonArtists, getSharedArtists } from '../utils/styleCombiner';
 
 interface TableViewProps {
   presets: StylePreset[];
@@ -112,22 +114,47 @@ export function TableView({
             <span className="font-bold text-white font-mono">{selectedIds.size}</span> presets selected
           </div>
           <div className="flex items-center gap-2">
-            {selectedIds.size === 2 && onOpenCombinerWithPair && (
-              <button
-                id="bulk-blend-selected-btn"
-                onClick={() => {
-                  const selectedArr = presets.filter((p) => selectedIds.has(p.id));
-                  if (selectedArr.length === 2) {
+            {selectedIds.size === 2 && onOpenCombinerWithPair && (() => {
+              const selectedArr = presets.filter((p) => selectedIds.has(p.id));
+              if (selectedArr.length !== 2) return null;
+              const hasConflict = haveCommonArtists(selectedArr[0], selectedArr[1]);
+              const conflictArtists = hasConflict
+                ? getSharedArtists(selectedArr[0], selectedArr[1])
+                : [];
+
+              return (
+                <button
+                  id="bulk-blend-selected-btn"
+                  onClick={() => {
+                    if (hasConflict) return;
                     onOpenCombinerWithPair(selectedArr[0], selectedArr[1]);
+                  }}
+                  disabled={hasConflict}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded font-bold transition-all ${
+                    hasConflict
+                      ? 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed opacity-70'
+                      : 'bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-950/50 border border-purple-400/30 hover:scale-105'
+                  }`}
+                  title={
+                    hasConflict
+                      ? `Cannot blend: Styles share artist (${conflictArtists.join(', ')})`
+                      : 'Blend these 2 selected styles together'
                   }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold shadow-md shadow-purple-950/50 border border-purple-400/30 transition-all hover:scale-105"
-                title="Blend these 2 selected styles together"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Blend Selected 2 Styles</span>
-              </button>
-            )}
+                >
+                  {hasConflict ? (
+                    <>
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Cannot Mix (Shared Artist)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Blend Selected 2 Styles</span>
+                    </>
+                  )}
+                </button>
+              );
+            })()}
 
             {onBulkExport && (
               <button

@@ -30,6 +30,10 @@ import {
   clearAllCombinations,
   resetStyleCombineCount,
   resetAllCombineCounts,
+  haveCommonArtists,
+  getSharedArtists,
+  getCompatibleStylesFor,
+  findRandomCompatiblePair,
 } from './utils/styleCombiner';
 
 const STORAGE_KEY = 'prompt_styles_studio_presets_v1';
@@ -177,12 +181,20 @@ export default function App() {
 
   // --- Fusion & Combiner Handlers ---
   const handleOpenCombiner = (styleA?: StylePreset | null, styleB?: StylePreset | null) => {
-    const initialA = styleA || fusionSlotA || presets[0] || null;
-    const initialB =
-      styleB ||
-      fusionSlotB ||
-      (presets.length > 1 && presets[1]?.id !== initialA?.id ? presets[1] : presets[0]) ||
-      null;
+    let initialA = styleA || fusionSlotA || presets[0] || null;
+    let initialB = styleB || fusionSlotB || null;
+
+    if (initialA) {
+      // Ensure initialB has no common artist with initialA
+      if (!initialB || initialB.id === initialA.id || haveCommonArtists(initialA, initialB)) {
+        const compatibleList = getCompatibleStylesFor(initialA, presets);
+        initialB =
+          compatibleList[0] ||
+          presets.find((p) => p.id !== initialA?.id && !haveCommonArtists(initialA, p)) ||
+          presets.find((p) => p.id !== initialA?.id) ||
+          null;
+      }
+    }
 
     setCombinerStyleA(initialA);
     setCombinerStyleB(initialB);
@@ -198,9 +210,29 @@ export default function App() {
       setFusionSlotB(null);
       showToast('Removed from Slot B', preset.name, 'info');
     } else if (!fusionSlotA) {
+      // Check if slot B is already filled and shares artists
+      if (fusionSlotB && haveCommonArtists(preset, fusionSlotB)) {
+        const shared = getSharedArtists(preset, fusionSlotB);
+        showToast(
+          'Cannot Mix: Common Artist',
+          `"${preset.name}" and "${fusionSlotB.name}" share artist (${shared.join(', ')}). Styles A and B cannot share artists.`,
+          'error'
+        );
+        return;
+      }
       setFusionSlotA(preset);
       showToast('Selected as Style A (Base)', preset.name, 'info');
     } else if (!fusionSlotB) {
+      // Verify preset has no common artists with Slot A
+      if (haveCommonArtists(fusionSlotA, preset)) {
+        const shared = getSharedArtists(fusionSlotA, preset);
+        showToast(
+          'Cannot Mix: Common Artist',
+          `"${preset.name}" and "${fusionSlotA.name}" share artist (${shared.join(', ')}). Styles A and B cannot share artists.`,
+          'error'
+        );
+        return;
+      }
       setFusionSlotB(preset);
       const partnerName = fusionSlotA?.name || 'Style A';
       showToast(
@@ -209,6 +241,16 @@ export default function App() {
         'success'
       );
     } else {
+      // Both were filled; user is replacing Slot B
+      if (haveCommonArtists(fusionSlotA, preset)) {
+        const shared = getSharedArtists(fusionSlotA, preset);
+        showToast(
+          'Cannot Mix: Common Artist',
+          `"${preset.name}" and "${fusionSlotA.name}" share artist (${shared.join(', ')}). Styles A and B cannot share artists.`,
+          'error'
+        );
+        return;
+      }
       setFusionSlotB(preset);
       showToast('Updated Style B (Accent)', preset.name, 'info');
     }
@@ -216,15 +258,14 @@ export default function App() {
 
   const handleRandomizeFusionPair = () => {
     if (presets.length < 2) return;
-    const idxA = Math.floor(Math.random() * presets.length);
-    let idxB = Math.floor(Math.random() * (presets.length - 1));
-    if (idxB >= idxA) idxB++;
-    const a = presets[idxA];
-    const b = presets[idxB];
-    if (a && b) {
+    const compatiblePair = findRandomCompatiblePair(presets);
+    if (compatiblePair) {
+      const [a, b] = compatiblePair;
       setFusionSlotA(a);
       setFusionSlotB(b);
-      showToast('Random Pair Selected', `${a.name} + ${b.name}`, 'info');
+      showToast('Distinct Pair Selected', `${a.name} + ${b.name} (no shared artists)`, 'info');
+    } else {
+      showToast('No Compatible Pair', 'All styles share overlapping artists.', 'error');
     }
   };
 

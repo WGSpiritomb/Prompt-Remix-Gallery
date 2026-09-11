@@ -72,6 +72,158 @@ export function mergeNegativePrompts(negA?: string, negB?: string): string {
   return merged.join(', ');
 }
 
+/**
+ * Normalizes an artist name for robust comparison (handles casing, punctuation, @ prefix, parentheses)
+ */
+export function normalizeArtistForComparison(name: string): string {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .replace(/\\/g, '')
+    .replace(/[()[\]{}'"]/g, ' ')
+    .replace(/^@+/, '')
+    .replace(/\b(art by|by|style of|in the style of|masterpiece|illustration)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Returns true if two artist tokens/strings represent the same artist
+ */
+export function doArtistsMatch(a: string, b: string): boolean {
+  const normA = normalizeArtistForComparison(a);
+  const normB = normalizeArtistForComparison(b);
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+
+  // Check matching significant words (skip common generic filler words)
+  const ignored = new Set(['the', 'and', 'art', 'style', 'mix', 'studio', 'films', 'digital', 'concept']);
+  const wordsA = normA.split(/\s+/).filter((w) => w.length >= 3 && !ignored.has(w));
+  const wordsB = normB.split(/\s+/).filter((w) => w.length >= 3 && !ignored.has(w));
+
+  for (const wa of wordsA) {
+    if (wordsB.includes(wa)) {
+      return true;
+    }
+  }
+
+  // Substring match for longer names (>= 4 chars)
+  if (normA.length >= 4 && normB.length >= 4) {
+    if (normA.includes(normB) || normB.includes(normA)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Extract all artists associated with a style preset
+ */
+export function getPresetArtists(preset: StylePreset | null | undefined): string[] {
+  if (!preset) return [];
+  const list = new Set<string>();
+  if (preset.derivedArtists && Array.isArray(preset.derivedArtists)) {
+    for (const a of preset.derivedArtists) {
+      if (a && a.trim()) list.add(a.trim());
+    }
+  }
+  const extracted = extractArtists(`${preset.name} ${preset.prompt}`);
+  for (const a of extracted) {
+    if (a && a.trim()) list.add(a.trim());
+  }
+  return Array.from(list);
+}
+
+/**
+ * Returns an array of common/shared artist names between two style presets
+ */
+export function getSharedArtists(
+  presetA: StylePreset | null | undefined,
+  presetB: StylePreset | null | undefined
+): string[] {
+  if (!presetA || !presetB) return [];
+  if (presetA.id && presetB.id && presetA.id === presetB.id) {
+    const artists = getPresetArtists(presetA);
+    return artists.length > 0 ? artists : [presetA.name];
+  }
+
+  const artistsA = getPresetArtists(presetA);
+  const artistsB = getPresetArtists(presetB);
+  const shared: string[] = [];
+
+  // Direct artist list comparison
+  for (const a of artistsA) {
+    for (const b of artistsB) {
+      if (doArtistsMatch(a, b)) {
+        shared.push(a);
+        break;
+      }
+    }
+  }
+
+  // Cross-check: does prompt B contain any artist of A as a whole word?
+  const promptBLower = ` ${presetB.name} ${presetB.prompt} `.toLowerCase();
+  for (const a of artistsA) {
+    const norm = normalizeArtistForComparison(a);
+    if (norm.length >= 4) {
+      const regex = new RegExp(`\\b${norm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      if (regex.test(promptBLower) && !shared.some((s) => doArtistsMatch(s, a))) {
+        shared.push(a);
+      }
+    }
+  }
+
+  // Cross-check: does prompt A contain any artist of B as a whole word?
+  const promptALower = ` ${presetA.name} ${presetA.prompt} `.toLowerCase();
+  for (const b of artistsB) {
+    const norm = normalizeArtistForComparison(b);
+    if (norm.length >= 4) {
+      const regex = new RegExp(`\\b${norm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      if (regex.test(promptALower) && !shared.some((s) => doArtistsMatch(s, b))) {
+        shared.push(b);
+      }
+    }
+  }
+
+  return Array.from(new Set(shared));
+}
+
+/**
+ * Returns true if Style A and Style B have any common artist (or are the same preset)
+ */
+export function haveCommonArtists(
+  presetA: StylePreset | null | undefined,
+  presetB: StylePreset | null | undefined
+): boolean {
+  if (!presetA || !presetB) return false;
+  if (presetA.id && presetB.id && presetA.id === presetB.id) return true;
+  return getSharedArtists(presetA, presetB).length > 0;
+}
+
+/**
+ * Filter presets to find only those compatible with target (i.e. having no common artists)
+ */
+export function getCompatibleStylesFor(target: StylePreset, presets: StylePreset[]): StylePreset[] {
+  return presets.filter((p) => p.id !== target.id && !haveCommonArtists(target, p));
+}
+
+/**
+ * Finds a random compatible pair from a list of presets where style A and style B have NO common artists
+ */
+export function findRandomCompatiblePair(presets: StylePreset[]): [StylePreset, StylePreset] | null {
+  if (presets.length < 2) return null;
+  const shuffledA = [...presets].sort(() => Math.random() - 0.5);
+  for (const a of shuffledA) {
+    const compatible = presets.filter((b) => b.id !== a.id && !haveCommonArtists(a, b));
+    if (compatible.length > 0) {
+      const randomB = compatible[Math.floor(Math.random() * compatible.length)];
+      return [a, randomB];
+    }
+  }
+  return null;
+}
+
 export interface CombineOptions {
   mode: BlendMode;
   subject?: string;
@@ -172,6 +324,13 @@ export function createCombinedPreset(
   customName?: string,
   options: CombineOptions = { mode: 'smart' }
 ): StylePreset {
+  if (haveCommonArtists(styleA, styleB)) {
+    const shared = getSharedArtists(styleA, styleB);
+    throw new Error(
+      `Cannot combine styles: Style A and Style B share common artist(s): ${shared.join(', ')}`
+    );
+  }
+
   const combinedPositive = combinePositivePrompts(styleA, styleB, {
     ...options,
     subject: options.subject ? options.subject.replace(/\{prompt\}/gi, '').trim() : '',
