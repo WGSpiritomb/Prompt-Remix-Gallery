@@ -36,6 +36,7 @@ import {
   findRandomCompatiblePair,
   isBaseStyleIgnoredForMixing,
   filterMixablePresets,
+  isTwoMixFusion,
 } from './utils/styleCombiner';
 
 const STORAGE_KEY = 'prompt_styles_studio_presets_v1';
@@ -465,34 +466,57 @@ export default function App() {
   };
 
   const handleExportCleanCSV = () => {
+    const exportable = presets.filter((p) => !isTwoMixFusion(p));
+    const excludedCount = presets.length - exportable.length;
     const csvContent = exportToStrictCSV(presets);
     downloadCSV(csvContent, 'styles.csv');
     showToast(
       'styles.csv Exported',
-      `Strict headers (name,prompt,negative_prompt) for ${presets.length} presets sorted A-Z`,
+      `Strict headers (name,prompt,negative_prompt) for ${exportable.length} presets sorted A-Z${
+        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      }`,
       'success'
     );
   };
 
   const handleExportExtendedCSV = () => {
+    const exportable = presets.filter((p) => !isTwoMixFusion(p));
+    const excludedCount = presets.length - exportable.length;
     const csvContent = exportToExtendedCSV(presets);
     downloadCSV(csvContent, 'styles_with_images.csv');
-    showToast('Extended CSV Exported', 'Includes image_url column, sorted Name A-Z', 'success');
+    showToast(
+      'Extended CSV Exported',
+      `Includes image_url column, sorted Name A-Z for ${exportable.length} presets${
+        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      }`,
+      'success'
+    );
   };
 
   const handleBulkExport = (selectedPresets: StylePreset[]) => {
+    const exportable = selectedPresets.filter((p) => !isTwoMixFusion(p));
+    const excludedCount = selectedPresets.length - exportable.length;
     const csvContent = exportToStrictCSV(selectedPresets);
     downloadCSV(csvContent, 'selected_styles.csv');
     showToast(
       'Selected Presets Exported',
-      `Exported ${selectedPresets.length} selected presets sorted Name A-Z`,
+      `Exported ${exportable.length} presets sorted Name A-Z${
+        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      }`,
       'success'
     );
   };
 
   const handleCopyCSVToClipboard = async () => {
+    const exportable = presets.filter((p) => !isTwoMixFusion(p));
+    const excludedCount = presets.length - exportable.length;
     const csvContent = exportToStrictCSV(presets);
-    await handleCopyText(csvContent, `${presets.length} presets in styles.csv format (A-Z)`);
+    await handleCopyText(
+      csvContent,
+      `${exportable.length} presets in styles.csv format (A-Z)${
+        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      }`
+    );
   };
 
   // --- Modal Openers ---

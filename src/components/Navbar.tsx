@@ -15,6 +15,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { ViewMode, StylePreset } from '../types';
+import { isTwoMixFusion } from '../utils/styleCombiner';
 
 interface NavbarProps {
   presets: StylePreset[];
@@ -191,31 +192,40 @@ export function Navbar({
                 <ChevronDown className="w-3 h-3 text-zinc-400" />
               </button>
 
-              {exportMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 liquid-glass-modal rounded-xl shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95">
-                  <div className="px-3 py-2 border-b border-white/[0.08] mb-1">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                      Export styles.csv
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      {presets.length} presets • Sorted Name A-Z
-                    </p>
-                  </div>
+              {exportMenuOpen && (() => {
+                const exportableCount = presets.filter((p) => !isTwoMixFusion(p)).length;
+                const fusionCount = presets.length - exportableCount;
 
-                  <button
-                    id="export-strict-csv-btn"
-                    onClick={() => {
-                      onExportCleanCSV();
-                      setExportMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left text-slate-200 hover:bg-white/[0.08] hover:text-indigo-300 transition-colors"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <div>
-                      <p className="font-medium">Download styles.csv</p>
-                      <p className="text-[10px] text-slate-400">Strict (name, prompt, negative_prompt) • A-Z</p>
+                return (
+                  <div className="absolute right-0 mt-2 w-64 liquid-glass-modal rounded-xl shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95">
+                    <div className="px-3 py-2 border-b border-white/[0.08] mb-1">
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                        Export styles.csv
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {exportableCount} presets • Sorted Name A-Z
+                      </p>
+                      {fusionCount > 0 && (
+                        <p className="text-[10px] text-amber-400/90 font-medium mt-0.5">
+                          ({fusionCount} 2-mix fusion{fusionCount > 1 ? 's' : ''} excluded)
+                        </p>
+                      )}
                     </div>
-                  </button>
+
+                    <button
+                      id="export-strict-csv-btn"
+                      onClick={() => {
+                        onExportCleanCSV();
+                        setExportMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left text-slate-200 hover:bg-white/[0.08] hover:text-indigo-300 transition-colors"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div>
+                        <p className="font-medium">Download styles.csv</p>
+                        <p className="text-[10px] text-slate-400">Strict (name, prompt, negative_prompt) • A-Z</p>
+                      </div>
+                    </button>
 
                   <button
                     id="copy-csv-clipboard-btn"
@@ -248,8 +258,9 @@ export function Navbar({
                     </div>
                   </button>
                 </div>
-              )}
-            </div>
+              );
+            })()}
+          </div>
 
             {/* Add Style Preset Button */}
             <button
