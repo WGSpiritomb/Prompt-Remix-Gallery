@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { StylePreset } from '../types';
+import { filterMixablePresets } from '../utils/styleCombiner';
 
 interface HowToCombineModalProps {
   isOpen: boolean;
@@ -29,20 +30,22 @@ export function HowToCombineModal({
 }: HowToCombineModalProps) {
   if (!isOpen) return null;
 
-  // Find popular demo pairs from preset list if available
+  const mixable = filterMixablePresets(presets);
+
+  // Find popular demo pairs from mixable preset list if available
   const findPreset = (keyword: string) =>
-    presets.find(
+    mixable.find(
       (p) =>
         p.name.toLowerCase().includes(keyword) ||
         p.prompt.toLowerCase().includes(keyword)
     );
 
-  const cyberpunkPreset = findPreset('cyberpunk') || presets[0];
-  const ghibliPreset = findPreset('ghibli') || presets[1] || presets[0];
-  const ukiyoePreset = findPreset('ukiyo') || presets[2] || presets[0];
-  const synthwavePreset = findPreset('synthwave') || presets[3] || presets[0];
-  const oilPreset = findPreset('oil') || presets[4] || presets[0];
-  const wlopPreset = findPreset('wlop') || presets[5] || presets[0];
+  const cyberpunkPreset = findPreset('cyberpunk') || mixable[0];
+  const ghibliPreset = findPreset('ghibli') || mixable[1] || mixable[0];
+  const ukiyoePreset = findPreset('ukiyo') || mixable[2] || mixable[0];
+  const synthwavePreset = findPreset('synthwave') || mixable[3] || mixable[0];
+  const oilPreset = findPreset('oil') || mixable[4] || mixable[0];
+  const wlopPreset = findPreset('wlop') || mixable[5] || mixable[0];
 
   return (
     <div

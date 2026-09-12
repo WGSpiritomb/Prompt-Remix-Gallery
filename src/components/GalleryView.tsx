@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { isBaseStyleIgnoredForMixing } from '../utils/styleCombiner';
+import { isBaseStyleIgnoredForMixing, isAlreadyMixedFusion } from '../utils/styleCombiner';
 
 interface GalleryViewProps {
   presets: StylePreset[];
@@ -97,6 +97,8 @@ export function GalleryView({
         const isSelectedB = selectedSlotBId === preset.id;
         const isSelectedForFusion = isSelectedA || isSelectedB;
         const isBase = isBaseStyleIgnoredForMixing(preset);
+        const isAlreadyMixed = isAlreadyMixedFusion(preset);
+        const isUnmixable = isBase || isAlreadyMixed;
 
         return (
           <div
@@ -208,7 +210,7 @@ export function GalleryView({
                         className="absolute right-0 mt-1.5 w-40 bg-zinc-950 rounded-xl border border-zinc-800 shadow-2xl p-1 z-30 animate-in fade-in"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {onOpenCombiner && !isBase && (
+                        {onOpenCombiner && !isUnmixable && (
                           <button
                             id={`card-menu-combine-${preset.id}`}
                             onClick={() => {
@@ -393,7 +395,7 @@ export function GalleryView({
               {/* Bottom Row Actions */}
               <div className="pt-2 border-t border-zinc-800 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  {!isBase && onToggleSelectForFusion ? (
+                  {!isUnmixable && onToggleSelectForFusion ? (
                     <button
                       id={`combine-bottom-btn-${preset.id}`}
                       onClick={() => onToggleSelectForFusion(preset)}
@@ -407,7 +409,7 @@ export function GalleryView({
                       <Layers className="w-3 h-3 text-purple-400" />
                       <span>{isSelectedA ? 'Style A' : isSelectedB ? 'Style B' : '+ Blend'}</span>
                     </button>
-                  ) : !isBase && onOpenCombiner ? (
+                  ) : !isUnmixable && onOpenCombiner ? (
                     <button
                       id={`combine-bottom-btn-${preset.id}`}
                       onClick={() => onOpenCombiner(preset)}

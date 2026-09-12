@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { getSharedArtists, isBaseStyleIgnoredForMixing } from '../utils/styleCombiner';
+import { getSharedArtists, isBaseStyleIgnoredForMixing, isAlreadyMixedFusion } from '../utils/styleCombiner';
 
 interface FusionDockProps {
   presets: StylePreset[];
@@ -51,6 +51,10 @@ export function FusionDock({
   const isBaseB = isBaseStyleIgnoredForMixing(styleB);
   const hasBaseConflict = isBaseA || isBaseB;
 
+  const isMixedA = isAlreadyMixedFusion(styleA);
+  const isMixedB = isAlreadyMixedFusion(styleB);
+  const hasMixedConflict = isMixedA || isMixedB;
+
   // If no styles are selected, keep screen completely clean and uncluttered
   if (!hasAnySelected) {
     return null;
@@ -73,7 +77,7 @@ export function FusionDock({
                   Mix 2 Styles
                   <span
                     className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
-                      hasBaseConflict
+                      hasBaseConflict || hasMixedConflict
                         ? 'bg-amber-950 text-amber-300 border border-amber-800'
                         : hasCommonArtist
                         ? 'bg-rose-950 text-rose-300 border border-rose-800'
@@ -82,6 +86,8 @@ export function FusionDock({
                   >
                     {hasBaseConflict
                       ? 'Base Style Excluded'
+                      : hasMixedConflict
+                      ? 'Mixed Fusion Excluded'
                       : hasCommonArtist
                       ? 'Common Artist Conflict'
                       : 'Active'}
@@ -92,6 +98,10 @@ export function FusionDock({
                 {hasBaseConflict ? (
                   <span className="text-amber-400 font-medium">
                     ⚠️ {isBaseA ? styleA?.name : styleB?.name} is a Base preset with leading numbers and cannot be mixed.
+                  </span>
+                ) : hasMixedConflict ? (
+                  <span className="text-amber-400 font-medium">
+                    ⚠️ {isMixedA ? styleA?.name : styleB?.name} is already a mixed fusion and cannot be used for mixing.
                   </span>
                 ) : hasCommonArtist ? (
                   <span className="text-rose-400 font-medium">
@@ -228,10 +238,12 @@ export function FusionDock({
             <button
               id="open-fusion-studio-btn"
               onClick={() => onOpenCombiner(styleA, styleB)}
-              disabled={hasCommonArtist || hasBaseConflict}
+              disabled={hasCommonArtist || hasBaseConflict || hasMixedConflict}
               title={
                 hasBaseConflict
                   ? 'Cannot blend: Base presets with leading numbers are excluded from mixing'
+                  : hasMixedConflict
+                  ? 'Cannot blend: Already mixed fusions are excluded from mixing'
                   : hasCommonArtist
                   ? `Cannot blend: Styles share artist (${sharedArtists.join(', ')})`
                   : hasBothSelected
@@ -239,7 +251,7 @@ export function FusionDock({
                   : 'Open Fusion Studio'
               }
               className={`w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                hasBaseConflict || hasCommonArtist
+                hasBaseConflict || hasMixedConflict || hasCommonArtist
                   ? 'bg-zinc-900 border border-zinc-700 text-zinc-500 cursor-not-allowed opacity-80'
                   : 'text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 shadow-lg shadow-indigo-950/60 hover:scale-[1.02] active:scale-[0.98]'
               }`}
@@ -248,6 +260,11 @@ export function FusionDock({
                 <>
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
                   <span>Cannot Mix (Base Style)</span>
+                </>
+              ) : hasMixedConflict ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <span>Cannot Mix (Already Mixed)</span>
                 </>
               ) : hasCommonArtist ? (
                 <>

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { isBaseStyleIgnoredForMixing } from '../utils/styleCombiner';
+import { isBaseStyleIgnoredForMixing, isAlreadyMixedFusion } from '../utils/styleCombiner';
 
 interface LightboxModalProps {
   isOpen: boolean;
@@ -276,7 +276,7 @@ export function LightboxModal({
 
           {/* Bottom Actions Toolbar */}
           <div className="pt-3.5 mt-3.5 border-t border-zinc-800 flex items-center justify-between gap-2">
-            {onOpenCombiner && !isBaseStyleIgnoredForMixing(preset) && (
+            {onOpenCombiner && !isBaseStyleIgnoredForMixing(preset) && !isAlreadyMixedFusion(preset) && (
               <button
                 onClick={() => {
                   onClose();

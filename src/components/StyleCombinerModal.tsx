@@ -28,6 +28,7 @@ import {
   getCompatibleStylesFor,
   findRandomCompatiblePair,
   isBaseStyleIgnoredForMixing,
+  isAlreadyMixedFusion,
   filterMixablePresets,
 } from '../utils/styleCombiner';
 import { ImageWithFallback } from './ArtworkPlaceholder';
@@ -87,7 +88,7 @@ export function StyleCombinerModal({
     if (!isOpen || mixablePresets.length === 0) return;
 
     let targetA =
-      (initialStyleA && !isBaseStyleIgnoredForMixing(initialStyleA) ? initialStyleA : null) ||
+      (initialStyleA && !isBaseStyleIgnoredForMixing(initialStyleA) && !isAlreadyMixedFusion(initialStyleA) ? initialStyleA : null) ||
       mixablePresets.find((p) => p.id === styleAId) ||
       mixablePresets[0];
 
@@ -95,7 +96,7 @@ export function StyleCombinerModal({
       setStyleAId(targetA.id);
 
       let targetB =
-        initialStyleB && !isBaseStyleIgnoredForMixing(initialStyleB) ? initialStyleB : null;
+        initialStyleB && !isBaseStyleIgnoredForMixing(initialStyleB) && !isAlreadyMixedFusion(initialStyleB) ? initialStyleB : null;
       if (!targetB || targetB.id === targetA.id || haveCommonArtists(targetA, targetB)) {
         const compatible = getCompatibleStylesFor(targetA, mixablePresets);
         targetB = compatible[0] || mixablePresets.find((p) => p.id !== targetA.id) || null;
@@ -129,6 +130,9 @@ export function StyleCombinerModal({
 
   // Base preset exclusion check
   const isBaseConflict = isBaseStyleIgnoredForMixing(styleA) || isBaseStyleIgnoredForMixing(styleB);
+
+  // Already mixed fusion exclusion check ("dont use already mixed fusions for mixing")
+  const isMixedConflict = isAlreadyMixedFusion(styleA) || isAlreadyMixedFusion(styleB);
 
   // Common artist analysis between Style A and Style B
   const sharedArtists = useMemo(
@@ -224,7 +228,7 @@ export function StyleCombinerModal({
   };
 
   const handleSaveAsPreset = () => {
-    if (hasCommonArtist || isBaseConflict) {
+    if (hasCommonArtist || isBaseConflict || isMixedConflict) {
       return;
     }
     const newPreset = createCombinedPreset(styleA, styleB, customPresetName, {
@@ -481,6 +485,24 @@ export function StyleCombinerModal({
                 </p>
                 <p className="text-amber-300/80 leading-relaxed">
                   Presets containing &ldquo;Base&rdquo; with leading numbers (such as &ldquo;01-Base&rdquo;) are excluded from mixing. Please select a standard style blueprint.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Mixed Fusion Conflict Alert Banner */}
+          {isMixedConflict && (
+            <div
+              id="combiner-mixed-fusion-conflict-alert"
+              className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-950/60 border border-amber-500/60 text-amber-200 animate-in fade-in shadow-lg"
+            >
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-amber-200 flex items-center gap-2">
+                  <span>Cannot Mix: Already Mixed Fusion Excluded</span>
+                </p>
+                <p className="text-amber-300/80 leading-relaxed">
+                  Already mixed fusions cannot be used for mixing. Please select original, unblended style blueprints.
                 </p>
               </div>
             </div>
@@ -833,10 +855,12 @@ export function StyleCombinerModal({
                 id="save-combined-preset-btn"
                 type="button"
                 onClick={handleSaveAsPreset}
-                disabled={hasCommonArtist || isBaseConflict || !customPresetName.trim() || savedSuccess}
+                disabled={hasCommonArtist || isBaseConflict || isMixedConflict || !customPresetName.trim() || savedSuccess}
                 title={
                   isBaseConflict
                     ? 'Cannot save: Base styles with leading numbers are excluded from mixing'
+                    : isMixedConflict
+                    ? 'Cannot save: Already mixed fusions cannot be used for mixing'
                     : hasCommonArtist
                     ? `Cannot save: Styles share artist (${sharedArtists.join(', ')})`
                     : !customPresetName.trim()
@@ -846,7 +870,7 @@ export function StyleCombinerModal({
                 className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
                   savedSuccess
                     ? 'bg-emerald-600 text-white shadow-emerald-950/50'
-                    : isBaseConflict || hasCommonArtist
+                    : isBaseConflict || isMixedConflict || hasCommonArtist
                     ? 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed opacity-60'
                     : 'bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40'
                 }`}
@@ -860,6 +884,11 @@ export function StyleCombinerModal({
                   <>
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                     <span>Cannot Mix (Base Style)</span>
+                  </>
+                ) : isMixedConflict ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Cannot Mix (Already Mixed)</span>
                   </>
                 ) : hasCommonArtist ? (
                   <>

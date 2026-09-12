@@ -37,6 +37,7 @@ import {
   isBaseStyleIgnoredForMixing,
   filterMixablePresets,
   isTwoMixFusion,
+  isAlreadyMixedFusion,
 } from './utils/styleCombiner';
 
 const STORAGE_KEY = 'prompt_styles_studio_presets_v1';
@@ -182,12 +183,12 @@ export default function App() {
     }
   };
 
-  // Clean up any Base styles from fusion slots if loaded from stale storage
+  // Clean up any Base styles or already mixed fusions from fusion slots if loaded from stale storage
   useEffect(() => {
-    if (fusionSlotA && isBaseStyleIgnoredForMixing(fusionSlotA)) {
+    if (fusionSlotA && (isBaseStyleIgnoredForMixing(fusionSlotA) || isAlreadyMixedFusion(fusionSlotA))) {
       setFusionSlotA(null);
     }
-    if (fusionSlotB && isBaseStyleIgnoredForMixing(fusionSlotB)) {
+    if (fusionSlotB && (isBaseStyleIgnoredForMixing(fusionSlotB) || isAlreadyMixedFusion(fusionSlotB))) {
       setFusionSlotB(null);
     }
   }, [fusionSlotA, fusionSlotB]);
@@ -203,25 +204,52 @@ export default function App() {
       );
       return;
     }
+    if (styleA && isAlreadyMixedFusion(styleA)) {
+      showToast(
+        'Mixed Fusion Excluded',
+        `"${styleA.name}" is already a mixed fusion and cannot be used for mixing.`,
+        'warning'
+      );
+      return;
+    }
+    if (styleB && isAlreadyMixedFusion(styleB)) {
+      showToast(
+        'Mixed Fusion Excluded',
+        `"${styleB.name}" is already a mixed fusion and cannot be used for mixing.`,
+        'warning'
+      );
+      return;
+    }
 
     const mixablePresets = filterMixablePresets(presets);
     if (mixablePresets.length === 0) {
-      showToast('No Mixable Styles', 'No valid non-Base styles available to mix.', 'warning');
+      showToast('No Mixable Styles', 'No valid unblended styles available to mix.', 'warning');
       return;
     }
 
     let initialA =
-      (styleA && !isBaseStyleIgnoredForMixing(styleA) ? styleA : null) ||
-      (fusionSlotA && !isBaseStyleIgnoredForMixing(fusionSlotA) ? fusionSlotA : null) ||
+      (styleA && !isBaseStyleIgnoredForMixing(styleA) && !isAlreadyMixedFusion(styleA) ? styleA : null) ||
+      (fusionSlotA && !isBaseStyleIgnoredForMixing(fusionSlotA) && !isAlreadyMixedFusion(fusionSlotA) ? fusionSlotA : null) ||
       mixablePresets[0] ||
       null;
 
-    let initialB = styleB && !isBaseStyleIgnoredForMixing(styleB) ? styleB : fusionSlotB && !isBaseStyleIgnoredForMixing(fusionSlotB) ? fusionSlotB : null;
+    let initialB =
+      styleB && !isBaseStyleIgnoredForMixing(styleB) && !isAlreadyMixedFusion(styleB)
+        ? styleB
+        : fusionSlotB && !isBaseStyleIgnoredForMixing(fusionSlotB) && !isAlreadyMixedFusion(fusionSlotB)
+        ? fusionSlotB
+        : null;
 
     if (initialA) {
-      // Ensure initialB has no common artist with initialA and is not a base style
-      if (!initialB || initialB.id === initialA.id || haveCommonArtists(initialA, initialB) || isBaseStyleIgnoredForMixing(initialB)) {
-        const compatibleList = getCompatibleStylesFor(initialA, presets);
+      // Ensure initialB has no common artist with initialA and is not a base style or already mixed fusion
+      if (
+        !initialB ||
+        initialB.id === initialA.id ||
+        haveCommonArtists(initialA, initialB) ||
+        isBaseStyleIgnoredForMixing(initialB) ||
+        isAlreadyMixedFusion(initialB)
+      ) {
+        const compatibleList = getCompatibleStylesFor(initialA, mixablePresets);
         initialB = compatibleList[0] || mixablePresets.find((p) => p.id !== initialA?.id) || null;
       }
     }
@@ -239,6 +267,16 @@ export default function App() {
       showToast(
         'Base Style Ignored for Mixing',
         `"${preset.name}" is a Base template with leading numbers and is excluded from style mixing.`,
+        'warning'
+      );
+      return;
+    }
+
+    // Strict rule: "dont use already mixed fusions for mixing"
+    if (isAlreadyMixedFusion(preset)) {
+      showToast(
+        'Mixed Fusion Excluded',
+        `"${preset.name}" is already a mixed fusion and cannot be used for mixing.`,
         'warning'
       );
       return;
@@ -826,12 +864,13 @@ export default function App() {
         onSelectPairToCombine={(styleAId, styleBId) => {
           const a = presets.find((p) => p.id === styleAId);
           const b = presets.find((p) => p.id === styleBId);
-          if (a && b) {
+          const mixable = filterMixablePresets(presets);
+          if (a && b && !isBaseStyleIgnoredForMixing(a) && !isAlreadyMixedFusion(a) && !isBaseStyleIgnoredForMixing(b) && !isAlreadyMixedFusion(b)) {
             setFusionSlotA(a);
             setFusionSlotB(b);
             handleOpenCombiner(a, b);
-          } else if (presets.length >= 2) {
-            handleOpenCombiner(presets[0], presets[1]);
+          } else if (mixable.length >= 2) {
+            handleOpenCombiner(mixable[0], mixable[1]);
           }
         }}
       />
