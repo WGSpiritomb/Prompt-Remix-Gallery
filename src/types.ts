@@ -11,9 +11,12 @@ export interface StylePreset {
   derivedTags?: string[];
   combineCount?: number;
   isCombined?: boolean;
+  isFusion?: boolean;
   parentStyleIds?: [string, string];
   parentStyleNames?: [string, string];
 }
+
+export type MainTab = 'styles' | 'fusions';
 
 export type ViewMode = 'gallery' | 'table';
 

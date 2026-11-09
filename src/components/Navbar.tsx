@@ -13,12 +13,15 @@ import {
   ChevronDown,
   Layers,
   HelpCircle,
+  Zap,
 } from 'lucide-react';
-import { ViewMode, StylePreset } from '../types';
-import { isTwoMixFusion } from '../utils/styleCombiner';
+import { ViewMode, StylePreset, MainTab } from '../types';
+import { isFusionPreset } from '../utils/styleCombiner';
 
 interface NavbarProps {
   presets: StylePreset[];
+  activeTab: MainTab;
+  onTabChange: (tab: MainTab) => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   showLeaderboard: boolean;
@@ -35,6 +38,8 @@ interface NavbarProps {
 
 export function Navbar({
   presets,
+  activeTab,
+  onTabChange,
   viewMode,
   onViewModeChange,
   showLeaderboard,
@@ -73,6 +78,9 @@ export function Navbar({
     setExportMenuOpen(false);
   };
 
+  const stylesCount = presets.filter((p) => !isFusionPreset(p)).length;
+  const fusionsCount = presets.filter((p) => isFusionPreset(p)).length;
+
   return (
     <header className="sticky top-0 z-40 bg-black/90 backdrop-blur-xl border-b border-zinc-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -96,51 +104,103 @@ export function Navbar({
             </div>
           </div>
 
-          {/* Center: View Switcher & Leaderboard Toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-950 border border-zinc-800">
-            <button
-              id="view-mode-gallery"
-              onClick={() => onViewModeChange('gallery')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                viewMode === 'gallery'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-              title="Gallery View"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Gallery</span>
-            </button>
+          {/* Center: Main Tabs (Styles vs Fusions) & View Mode */}
+          <div className="flex items-center gap-2">
+            {/* Main Tabs: Styles & Fusions */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-950 border border-zinc-800">
+              <button
+                id="main-tab-styles-btn"
+                onClick={() => onTabChange('styles')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'styles'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+                title="Styles Library & 3-Artist Mixes"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Styles</span>
+                <span
+                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                    activeTab === 'styles'
+                      ? 'bg-zinc-700 text-zinc-200'
+                      : 'bg-zinc-900 text-zinc-500'
+                  }`}
+                >
+                  {stylesCount}
+                </span>
+              </button>
 
-            <button
-              id="view-mode-table"
-              onClick={() => onViewModeChange('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                viewMode === 'table'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-              title="Spreadsheet Table View"
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Table</span>
-            </button>
+              <button
+                id="main-tab-fusions-btn"
+                onClick={() => onTabChange('fusions')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'fusions'
+                    ? 'bg-purple-950/80 text-purple-200 border border-purple-700/60 shadow-sm'
+                    : 'text-zinc-400 hover:text-purple-300 hover:bg-zinc-900'
+                }`}
+                title="Blended Fusions (Separate Tab - Excluded from CSV)"
+              >
+                <Zap className={`w-3.5 h-3.5 ${activeTab === 'fusions' ? 'fill-purple-400 text-purple-400' : 'text-purple-400'}`} />
+                <span>Fusions</span>
+                <span
+                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                    activeTab === 'fusions'
+                      ? 'bg-purple-900/80 text-purple-200 border border-purple-700/40'
+                      : 'bg-zinc-900 text-purple-400'
+                  }`}
+                >
+                  {fusionsCount}
+                </span>
+              </button>
+            </div>
 
-            <div className="w-[1px] h-4 bg-zinc-800 mx-0.5" />
+            {/* View Switcher & Stats */}
+            <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-zinc-950 border border-zinc-800">
+              <button
+                id="view-mode-gallery"
+                onClick={() => onViewModeChange('gallery')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  viewMode === 'gallery'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+                title="Gallery View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Gallery</span>
+              </button>
 
-            <button
-              id="toggle-leaderboard-btn"
-              onClick={onToggleLeaderboard}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                showLeaderboard
-                  ? 'bg-indigo-950/70 text-indigo-300 border border-indigo-700/50'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-              title="Toggle Artist & Tag Stats"
-            >
-              <Trophy className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden lg:inline">Stats</span>
-            </button>
+              <button
+                id="view-mode-table"
+                onClick={() => onViewModeChange('table')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  viewMode === 'table'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+                title="Spreadsheet Table View"
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Table</span>
+              </button>
+
+              <div className="w-[1px] h-4 bg-zinc-800 mx-0.5" />
+
+              <button
+                id="toggle-leaderboard-btn"
+                onClick={onToggleLeaderboard}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  showLeaderboard
+                    ? 'bg-indigo-950/70 text-indigo-300 border border-indigo-700/50'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+                title="Toggle Artist & Tag Stats"
+              >
+                <Trophy className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden lg:inline">Stats</span>
+              </button>
+            </div>
           </div>
 
           {/* Right Action Buttons */}
@@ -193,7 +253,7 @@ export function Navbar({
               </button>
 
               {exportMenuOpen && (() => {
-                const exportableCount = presets.filter((p) => !isTwoMixFusion(p)).length;
+                const exportableCount = presets.filter((p) => !isFusionPreset(p)).length;
                 const fusionCount = presets.length - exportableCount;
 
                 return (
@@ -203,11 +263,11 @@ export function Navbar({
                         Export styles.csv
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        {exportableCount} presets • Sorted Name A-Z
+                        {exportableCount} styles • Sorted Name A-Z
                       </p>
                       {fusionCount > 0 && (
-                        <p className="text-[10px] text-amber-400/90 font-medium mt-0.5">
-                          ({fusionCount} 2-mix fusion{fusionCount > 1 ? 's' : ''} excluded)
+                        <p className="text-[10px] text-purple-400 font-medium mt-0.5">
+                          ({fusionCount} fusion{fusionCount > 1 ? 's' : ''} excluded from .csv)
                         </p>
                       )}
                     </div>

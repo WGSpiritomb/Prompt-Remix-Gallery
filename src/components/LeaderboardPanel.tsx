@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { StylePreset, ExtractedTag, StylePairCombination } from '../types';
 import { computeLeaderboards } from '../utils/tagExtractor';
+import { isFusionPreset } from '../utils/styleCombiner';
 import { ImageWithFallback } from './ArtworkPlaceholder';
 
 interface LeaderboardPanelProps {
@@ -67,8 +68,8 @@ export function LeaderboardPanel({
     .filter((p) => (p.combineCount || 0) > 0)
     .sort((a, b) => (b.combineCount || 0) - (a.combineCount || 0));
 
-  // Saved fusions
-  const savedFusions = presets.filter((p) => p.isCombined);
+  // Saved fusions (strictly excluded from mixing & CSV)
+  const savedFusions = presets.filter(isFusionPreset);
 
   const maxArtistCount = topArtists.length > 0 ? topArtists[0].count : 1;
   const maxTagCount = topTags.length > 0 ? topTags[0].count : 1;

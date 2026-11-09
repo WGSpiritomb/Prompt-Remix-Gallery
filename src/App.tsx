@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Zap, Layers, Trash2, Sparkles } from 'lucide-react';
 import {
   StylePreset,
   ViewMode,
@@ -6,6 +7,7 @@ import {
   ToastMessage,
   StylePairCombination,
   BlendMode,
+  MainTab,
 } from './types';
 import { Navbar } from './components/Navbar';
 import { FilterBar } from './components/FilterBar';
@@ -38,11 +40,14 @@ import {
   filterMixablePresets,
   isTwoMixFusion,
   isAlreadyMixedFusion,
+  isFusionPreset,
+  isThreeArtistMix,
 } from './utils/styleCombiner';
 
 const STORAGE_KEY = 'prompt_styles_studio_presets_v1';
 const VIEW_MODE_KEY = 'prompt_styles_view_mode';
 const SORT_KEY = 'prompt_styles_sort';
+const MAIN_TAB_KEY = 'prompt_styles_main_tab';
 
 export default function App() {
   // --- Persistent State ---
@@ -51,7 +56,14 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as StylePreset[];
-        return parsed.map(enrichPreset);
+        return parsed.map((p) => {
+          // Rule: "3 artist mixes are not fusions. its only a fusion when you mix two 3 artist mixes."
+          if (isThreeArtistMix(p)) {
+            p.isCombined = false;
+            p.isFusion = false;
+          }
+          return enrichPreset(p);
+        });
       }
     } catch (e) {
       console.error('Failed to load presets from localStorage', e);
@@ -63,6 +75,13 @@ export default function App() {
     return loadCombinations(presets);
   });
 
+  const [activeTab, setActiveTab] = useState<MainTab>(() => {
+    const saved = localStorage.getItem(MAIN_TAB_KEY);
+    return saved === 'fusions' ? 'fusions' : 'styles';
+  });
+
+  const [confirmPurgeFusions, setConfirmPurgeFusions] = useState(false);
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem(VIEW_MODE_KEY);
     return saved === 'table' ? 'table' : 'gallery';
@@ -72,6 +91,11 @@ export default function App() {
     const saved = localStorage.getItem(SORT_KEY);
     return (saved as SortOption) || 'name_asc';
   });
+
+  // Persist activeTab preference
+  useEffect(() => {
+    localStorage.setItem(MAIN_TAB_KEY, activeTab);
+  }, [activeTab]);
 
   // --- Filtering State ---
   const [search, setSearch] = useState('');
@@ -373,9 +397,17 @@ export default function App() {
   };
 
   const handleSaveCombinedPreset = (newPreset: StylePreset) => {
-    const enriched = enrichPreset(newPreset);
+    const fusionPreset: StylePreset = {
+      ...newPreset,
+      isFusion: true,
+      isCombined: true,
+    };
+    const enriched = enrichPreset(fusionPreset);
     setPresets((prev) => [enriched, ...prev]);
-    showToast('Fusion Preset Saved!', `Added "${enriched.name}" to styles library`, 'success');
+    // Clear fusion slots
+    setFusionSlotA(null);
+    setFusionSlotB(null);
+    showToast('Fusion Preset Saved!', `Saved "${enriched.name}" to the Fusions tab!`, 'success');
   };
 
   const handleDeleteCombinationPair = (pairKey: string) => {
@@ -391,9 +423,9 @@ export default function App() {
   };
 
   const handleDeleteAllSavedFusions = () => {
-    const count = presets.filter((p) => p.isCombined).length;
-    setPresets((prev) => prev.filter((p) => !p.isCombined));
-    showToast('Fusions Deleted', `Removed ${count} combined presets from library`, 'info');
+    const fusions = presets.filter(isFusionPreset);
+    setPresets((prev) => prev.filter((p) => !isFusionPreset(p)));
+    showToast('Fusions Deleted', `Removed ${fusions.length} fusion presets`, 'info');
   };
 
   const handleResetStyleCombineCount = (presetId: string) => {
@@ -409,7 +441,7 @@ export default function App() {
 
   const handleDeleteFilteredCombined = () => {
     const toDeleteIds = new Set(
-      filteredAndSortedPresets.filter((p) => p.isCombined).map((p) => p.id)
+      filteredAndSortedPresets.filter(isFusionPreset).map((p) => p.id)
     );
     setPresets((prev) => prev.filter((p) => !toDeleteIds.has(p.id)));
     showToast('Filtered Fusions Deleted', `Removed ${toDeleteIds.size} fusion presets`, 'info');
@@ -504,55 +536,63 @@ export default function App() {
   };
 
   const handleExportCleanCSV = () => {
-    const exportable = presets.filter((p) => !isTwoMixFusion(p));
+    const exportable = presets.filter((p) => !isFusionPreset(p));
     const excludedCount = presets.length - exportable.length;
     const csvContent = exportToStrictCSV(presets);
     downloadCSV(csvContent, 'styles.csv');
     showToast(
       'styles.csv Exported',
-      `Strict headers (name,prompt,negative_prompt) for ${exportable.length} presets sorted A-Z${
-        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      `Strict headers (name,prompt,negative_prompt) for ${exportable.length} styles sorted A-Z${
+        excludedCount > 0 ? ` (${excludedCount} fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
       }`,
       'success'
     );
   };
 
   const handleExportExtendedCSV = () => {
-    const exportable = presets.filter((p) => !isTwoMixFusion(p));
+    const exportable = presets.filter((p) => !isFusionPreset(p));
     const excludedCount = presets.length - exportable.length;
     const csvContent = exportToExtendedCSV(presets);
     downloadCSV(csvContent, 'styles_with_images.csv');
     showToast(
       'Extended CSV Exported',
-      `Includes image_url column, sorted Name A-Z for ${exportable.length} presets${
-        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      `Includes image_url column, sorted Name A-Z for ${exportable.length} styles${
+        excludedCount > 0 ? ` (${excludedCount} fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
       }`,
       'success'
     );
   };
 
   const handleBulkExport = (selectedPresets: StylePreset[]) => {
-    const exportable = selectedPresets.filter((p) => !isTwoMixFusion(p));
+    const exportable = selectedPresets.filter((p) => !isFusionPreset(p));
     const excludedCount = selectedPresets.length - exportable.length;
+    if (exportable.length === 0) {
+      showToast(
+        'Fusions Excluded from CSV',
+        'Fusions cannot be exported to .csv files per system rules.',
+        'warning'
+      );
+      return;
+    }
     const csvContent = exportToStrictCSV(selectedPresets);
     downloadCSV(csvContent, 'selected_styles.csv');
     showToast(
-      'Selected Presets Exported',
-      `Exported ${exportable.length} presets sorted Name A-Z${
-        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      'Selected Styles Exported',
+      `Exported ${exportable.length} styles sorted Name A-Z${
+        excludedCount > 0 ? ` (${excludedCount} fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
       }`,
       'success'
     );
   };
 
   const handleCopyCSVToClipboard = async () => {
-    const exportable = presets.filter((p) => !isTwoMixFusion(p));
+    const exportable = presets.filter((p) => !isFusionPreset(p));
     const excludedCount = presets.length - exportable.length;
     const csvContent = exportToStrictCSV(presets);
     await handleCopyText(
       csvContent,
-      `${exportable.length} presets in styles.csv format (A-Z)${
-        excludedCount > 0 ? ` (${excludedCount} 2-mix fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
+      `${exportable.length} styles in styles.csv format (A-Z)${
+        excludedCount > 0 ? ` (${excludedCount} fusion${excludedCount > 1 ? 's' : ''} excluded)` : ''
       }`
     );
   };
@@ -576,6 +616,13 @@ export default function App() {
   // --- Filtering & Sorting Compute ---
   const filteredAndSortedPresets = useMemo(() => {
     let result = [...presets];
+
+    // Filter by Active Tab: 'styles' vs 'fusions'
+    if (activeTab === 'styles') {
+      result = result.filter((item) => !isFusionPreset(item));
+    } else {
+      result = result.filter((item) => isFusionPreset(item));
+    }
 
     // Search query
     if (search.trim()) {
@@ -667,6 +714,7 @@ export default function App() {
     hasNegativeOnly,
     combinedOnly,
     sortBy,
+    activeTab,
   ]);
 
   const handleResetFilters = () => {
@@ -687,6 +735,8 @@ export default function App() {
       {/* Top Navigation */}
       <Navbar
         presets={presets}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         showLeaderboard={showLeaderboard}
@@ -703,6 +753,74 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        {/* Fusions Tab Dedicated Header Banner */}
+        {activeTab === 'fusions' && (
+          <div className="mb-5 p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-zinc-950 to-indigo-950/30 border border-purple-500/20 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
+                  <Zap className="w-4 h-4 fill-purple-400 text-purple-400" />
+                </div>
+                <h2 className="text-base font-bold text-white tracking-tight">Style Fusions</h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800">
+                  {presets.filter(isFusionPreset).length} Fusions
+                </span>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-800">
+                  Excluded from styles.csv export
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                Fusions are created by mixing two 3-artist styles. Fusions are stored on this separate tab and cannot be used as parents for further mixing.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                id="fusions-tab-mix-new-btn"
+                onClick={() => handleOpenCombiner()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-950/50 transition-all hover:scale-[1.02]"
+                title="Open 2-Style Fusion Combiner"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Mix New Fusion</span>
+              </button>
+
+              {presets.filter(isFusionPreset).length > 0 && (
+                confirmPurgeFusions ? (
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-rose-950/80 border border-rose-800">
+                    <span className="text-[11px] text-rose-300 px-1 font-medium">Delete all fusions?</span>
+                    <button
+                      onClick={() => {
+                        handleDeleteAllSavedFusions();
+                        setConfirmPurgeFusions(false);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-rose-600 text-white text-[11px] font-bold hover:bg-rose-500 transition-colors"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => setConfirmPurgeFusions(false)}
+                      className="px-2 py-0.5 rounded-lg bg-zinc-800 text-zinc-300 text-[11px] hover:text-white transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    id="fusions-tab-clear-all-btn"
+                    onClick={() => setConfirmPurgeFusions(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-rose-300 bg-rose-950/30 hover:bg-rose-950/60 border border-rose-800/40 transition-colors"
+                    title="Delete all blended fusions"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Clear Fusions</span>
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Search & Filter Bar */}
         <FilterBar
           search={search}
@@ -715,24 +833,50 @@ export default function App() {
           onToggleHasImageOnly={() => setHasImageOnly(!hasImageOnly)}
           hasNegativeOnly={hasNegativeOnly}
           onToggleHasNegativeOnly={() => setHasNegativeOnly(!hasNegativeOnly)}
-          combinedOnly={combinedOnly}
-          onToggleCombinedOnly={() => setCombinedOnly(!combinedOnly)}
+          combinedOnly={activeTab === 'styles' ? combinedOnly : false}
+          onToggleCombinedOnly={activeTab === 'styles' ? () => setCombinedOnly(!combinedOnly) : undefined}
           selectedArtist={selectedArtist}
           onClearArtist={() => setSelectedArtist(null)}
           selectedTag={selectedTag}
           onClearTag={() => setSelectedTag(null)}
-          totalCount={presets.length}
+          totalCount={activeTab === 'styles' ? presets.filter((p) => !isFusionPreset(p)).length : presets.filter(isFusionPreset).length}
           filteredCount={filteredAndSortedPresets.length}
           onResetFilters={handleResetFilters}
           onDeleteFilteredCombined={handleDeleteFilteredCombined}
-          onOpenStyleCreator={() => setIsStyleCreatorOpen(true)}
+          onOpenStyleCreator={activeTab === 'styles' ? () => setIsStyleCreatorOpen(true) : undefined}
         />
 
         {/* Layout Grid: Main Content + Optional Side Leaderboard */}
         <div className="flex flex-col lg:flex-row gap-5 items-start">
           {/* Presets View Container */}
           <div className="flex-1 w-full min-w-0">
-            {viewMode === 'gallery' ? (
+            {filteredAndSortedPresets.length === 0 && activeTab === 'fusions' && !search && !selectedArtist && !selectedTag && !onlyFavorites ? (
+              <div className="text-center py-16 px-4 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col items-center justify-center">
+                <div className="w-14 h-14 rounded-2xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-center mb-3 text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.15)]">
+                  <Zap className="w-7 h-7 fill-purple-400/20 text-purple-400" />
+                </div>
+                <h3 className="text-base font-bold text-white">No Style Fusions Yet</h3>
+                <p className="text-xs text-zinc-400 max-w-md mt-1 mb-5">
+                  Fusions are created only when you mix two 3-artist styles together. Fusions appear here on this separate tab and are strictly excluded from .csv exports.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('styles')}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-white transition-colors border border-zinc-700"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Browse Styles Library</span>
+                  </button>
+                  <button
+                    onClick={() => handleOpenCombiner()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition-colors shadow-md shadow-purple-950/50"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Open 2-Style Combiner</span>
+                  </button>
+                </div>
+              </div>
+            ) : viewMode === 'gallery' ? (
               <GalleryView
                 presets={filteredAndSortedPresets}
                 selectedSlotAId={fusionSlotA?.id || null}
@@ -791,21 +935,23 @@ export default function App() {
         </div>
       </main>
 
-      {/* Persistent Fusion Dock (Bottom Quick Combiner Bar) */}
-      <FusionDock
-        presets={presets}
-        styleA={fusionSlotA}
-        styleB={fusionSlotB}
-        onClearStyleA={() => setFusionSlotA(null)}
-        onClearStyleB={() => setFusionSlotB(null)}
-        onClearAll={() => {
-          setFusionSlotA(null);
-          setFusionSlotB(null);
-        }}
-        onRandomizePair={handleRandomizeFusionPair}
-        onOpenCombiner={handleOpenCombiner}
-        onOpenGuide={() => setIsGuideOpen(true)}
-      />
+      {/* Persistent Fusion Dock (Bottom Quick Combiner Bar - Only on Styles tab) */}
+      {activeTab === 'styles' && (
+        <FusionDock
+          presets={presets}
+          styleA={fusionSlotA}
+          styleB={fusionSlotB}
+          onClearStyleA={() => setFusionSlotA(null)}
+          onClearStyleB={() => setFusionSlotB(null)}
+          onClearAll={() => {
+            setFusionSlotA(null);
+            setFusionSlotB(null);
+          }}
+          onRandomizePair={handleRandomizeFusionPair}
+          onOpenCombiner={handleOpenCombiner}
+          onOpenGuide={() => setIsGuideOpen(true)}
+        />
+      )}
 
       {/* Modals */}
       <StyleModal

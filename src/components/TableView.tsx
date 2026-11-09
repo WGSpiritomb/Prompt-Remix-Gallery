@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { haveCommonArtists, getSharedArtists, isBaseStyleIgnoredForMixing, isAlreadyMixedFusion } from '../utils/styleCombiner';
+import { haveCommonArtists, getSharedArtists, isBaseStyleIgnoredForMixing, isAlreadyMixedFusion, isFusionPreset } from '../utils/styleCombiner';
 
 interface TableViewProps {
   presets: StylePreset[];
@@ -296,7 +296,7 @@ export function TableView({
                             <p className="font-bold text-indigo-400 group-hover:text-indigo-300 transition-colors line-clamp-1 text-xs">
                               {preset.name}
                             </p>
-                            {preset.isCombined && (
+                            {isFusionPreset(preset) && (
                               <span className="text-[8px] font-mono uppercase px-1 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-800 shrink-0">
                                 Fusion
                               </span>

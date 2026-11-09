@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { isBaseStyleIgnoredForMixing, isAlreadyMixedFusion } from '../utils/styleCombiner';
+import { isBaseStyleIgnoredForMixing, isAlreadyMixedFusion, isFusionPreset } from '../utils/styleCombiner';
 
 interface LightboxModalProps {
   isOpen: boolean;
@@ -157,13 +157,18 @@ export function LightboxModal({
                   <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
                     Preset #{currentIndex + 1} of {presetsList.length}
                   </span>
-                  {preset.isCombined && (
+                  {isFusionPreset(preset) && (
                     <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-700 font-bold">
                       Fusion
                     </span>
                   )}
                 </div>
                 <h2 className="text-base font-bold text-white mt-1">{preset.name}</h2>
+                {isFusionPreset(preset) && preset.parentStyleNames && (
+                  <p className="text-xs text-purple-300/80 font-mono mt-0.5">
+                    Blended from: {preset.parentStyleNames[0]} + {preset.parentStyleNames[1]}
+                  </p>
+                )}
               </div>
 
               <button
@@ -300,10 +305,10 @@ export function LightboxModal({
                     }
                   }}
                   className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-rose-950/40 hover:bg-rose-950 text-rose-300 border border-rose-800/60 transition-colors"
-                  title={preset.isCombined ? 'Delete Mix' : 'Delete Preset'}
+                  title={isFusionPreset(preset) ? 'Delete Fusion' : 'Delete Preset'}
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                  <span>{preset.isCombined ? 'Delete Mix' : 'Delete'}</span>
+                  <span>{isFusionPreset(preset) ? 'Delete Fusion' : 'Delete'}</span>
                 </button>
               )}
 

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { StylePreset } from '../types';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { isBaseStyleIgnoredForMixing, isAlreadyMixedFusion } from '../utils/styleCombiner';
+import { isBaseStyleIgnoredForMixing, isAlreadyMixedFusion, isFusionPreset } from '../utils/styleCombiner';
 
 interface GalleryViewProps {
   presets: StylePreset[];
@@ -156,9 +156,10 @@ export function GalleryView({
                     </span>
                   )}
 
-                  {preset.isCombined && (
-                    <span className="text-[9px] font-mono uppercase font-bold px-2 py-0.5 rounded bg-purple-900/70 text-purple-200 border border-purple-700/50">
-                      Mix
+                  {isFusionPreset(preset) && (
+                    <span className="text-[9px] font-mono uppercase font-bold px-2 py-0.5 rounded bg-purple-900/80 text-purple-200 border border-purple-700/50 flex items-center gap-1 shadow-sm">
+                      <Zap className="w-2.5 h-2.5 fill-purple-300 text-purple-300" />
+                      <span>Fusion</span>
                     </span>
                   )}
                 </div>
@@ -282,6 +283,13 @@ export function GalleryView({
                     </span>
                   )}
                 </div>
+
+                {/* If Fusion: display parent styles */}
+                {isFusionPreset(preset) && preset.parentStyleNames && (
+                  <p className="text-[10px] text-purple-300/80 font-mono mt-0.5 line-clamp-1">
+                    Blend: {preset.parentStyleNames[0]} + {preset.parentStyleNames[1]}
+                  </p>
+                )}
 
                 {/* Artists Badges */}
                 <div className="flex flex-wrap gap-1 mt-1.5">

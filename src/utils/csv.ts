@@ -1,5 +1,5 @@
 import { StylePreset, CSVParseResult } from '../types';
-import { isTwoMixFusion } from './styleCombiner';
+import { isTwoMixFusion, isFusionPreset } from './styleCombiner';
 
 /**
  * Standard RFC 4180 compliant CSV parser.
@@ -196,14 +196,14 @@ function escapeCSVField(field: string | undefined): string {
 /**
  * Strict export function outputting headers: name,prompt,negative_prompt
  * Always sorts presets alphabetically by Name A-Z.
- * Automatically excludes 2-mix fusions per user requirement.
+ * Automatically excludes fusions per user requirement ("fusions are not to be exported in .csv").
  */
 export function exportToStrictCSV(presets: StylePreset[]): string {
   const headers = ['name', 'prompt', 'negative_prompt'];
   const lines: string[] = [headers.join(',')];
 
-  // Exclude 2-mix fusions from export
-  const exportable = presets.filter((p) => !isTwoMixFusion(p));
+  // Exclude all fusions from CSV export
+  const exportable = presets.filter((p) => !isFusionPreset(p));
 
   // Always sort alphabetically by Name A-Z
   const sortedPresets = [...exportable].sort((a, b) =>
@@ -223,14 +223,14 @@ export function exportToStrictCSV(presets: StylePreset[]): string {
 /**
  * Extended export function that includes image_url if present
  * Always sorts presets alphabetically by Name A-Z.
- * Automatically excludes 2-mix fusions per user requirement.
+ * Automatically excludes fusions per user requirement ("fusions are not to be exported in .csv").
  */
 export function exportToExtendedCSV(presets: StylePreset[]): string {
   const headers = ['name', 'prompt', 'negative_prompt', 'image_url'];
   const lines: string[] = [headers.join(',')];
 
-  // Exclude 2-mix fusions from export
-  const exportable = presets.filter((p) => !isTwoMixFusion(p));
+  // Exclude all fusions from CSV export
+  const exportable = presets.filter((p) => !isFusionPreset(p));
 
   // Always sort alphabetically by Name A-Z
   const sortedPresets = [...exportable].sort((a, b) =>

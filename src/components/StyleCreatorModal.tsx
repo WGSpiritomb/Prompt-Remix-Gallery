@@ -25,6 +25,7 @@ import {
   buildThreeArtistNegativePrompt,
   ThreeArtistBlendMode,
   formatArtistForPrompt,
+  isFusionPreset,
 } from '../utils/styleCombiner';
 
 interface StyleCreatorModalProps {
@@ -42,9 +43,9 @@ export function StyleCreatorModal({
   onSavePreset,
   onCopyText,
 }: StyleCreatorModalProps) {
-  // Check if any combined/fusion mixes exist in presets
+  // Check if any fusion mixes exist in presets
   const hasFusions = useMemo(() => {
-    return presets.some((p) => p.isCombined);
+    return presets.some((p) => isFusionPreset(p));
   }, [presets]);
 
   const [artistSource, setArtistSource] = useState<'all' | 'fusions'>('all');
@@ -52,7 +53,7 @@ export function StyleCreatorModal({
   // All unique artists available across the library mixes (strictly no traditional artists)
   const allUniqueArtists = useMemo(() => {
     const targetPresets = (artistSource === 'fusions' && hasFusions)
-      ? presets.filter((p) => p.isCombined)
+      ? presets.filter((p) => isFusionPreset(p))
       : presets;
     return getAllUniqueArtists(targetPresets);
   }, [presets, artistSource, hasFusions]);
@@ -179,7 +180,8 @@ export function StyleCreatorModal({
       prompt: generatedPrompt,
       negative_prompt: negativePrompt.trim(),
       favorite: true,
-      isCombined: true,
+      isCombined: false,
+      isFusion: false,
       derivedArtists: artists.map((a) => a.trim()),
       derivedTags: ['3-artist mix', 'trio', blendMode],
     };
