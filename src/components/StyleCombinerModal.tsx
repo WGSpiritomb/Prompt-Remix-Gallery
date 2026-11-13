@@ -1,22 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
-  Layers,
-  Sparkles,
+  Lock,
+  Unlock,
+  Shuffle,
   ArrowLeftRight,
   Copy,
   Check,
-  Ban,
   Save,
-  Shuffle,
-  Sliders,
-  Flame,
-  Plus,
-  Users,
-  Tag,
-  ArrowRight,
-  Info,
+  Search,
+  ChevronDown,
+  Undo2,
+  Dices,
   AlertTriangle,
+  HelpCircle,
 } from 'lucide-react';
 import { StylePreset, BlendMode } from '../types';
 import {
@@ -27,12 +24,13 @@ import {
   getSharedArtists,
   getCompatibleStylesFor,
   findRandomCompatiblePair,
+  findRandomCompatiblePartner,
   isBaseStyleIgnoredForMixing,
   isAlreadyMixedFusion,
   filterMixablePresets,
+  getPresetArtists,
 } from '../utils/styleCombiner';
 import { ImageWithFallback } from './ArtworkPlaceholder';
-import { extractArtists, extractAestheticTags } from '../utils/tagExtractor';
 
 interface StyleCombinerModalProps {
   isOpen: boolean;
@@ -55,6 +53,280 @@ const SAMPLE_SUBJECTS = [
   'majestic dragon perched on a snow mountain',
 ];
 
+const BLEND_MODES: { id: BlendMode; label: string; hint: string }[] = [
+  { id: 'smart', label: 'Smart', hint: 'Deduplicates tokens and balances artists cleanly' },
+  { id: 'weighted', label: 'Weighted', hint: 'Applies explicit A:B weight ratios' },
+  { id: 'alternating', label: 'Step Matrix', hint: 'Alternates prompts across sampling steps' },
+  { id: 'sequential', label: 'Sequential', hint: 'Concatenates Style A followed by Style B' },
+];
+
+interface PickerSlotProps {
+  slot: 'A' | 'B';
+  selected: StylePreset | null;
+  otherSelected: StylePreset | null;
+  mixablePresets: StylePreset[];
+  isLocked: boolean;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onClosePicker: () => void;
+  onSelect: (preset: StylePreset) => void;
+  onToggleLock: () => void;
+  onRollSingle: () => void;
+  canRollSingle: boolean;
+}
+
+function CombinerSlotCard({
+  slot,
+  selected,
+  otherSelected,
+  mixablePresets,
+  isLocked,
+  isOpen,
+  onToggleOpen,
+  onClosePicker,
+  onSelect,
+  onToggleLock,
+  onRollSingle,
+  canRollSingle,
+}: PickerSlotProps) {
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setQuery('');
+      setTimeout(() => searchInputRef.current?.focus(), 20);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onClosePicker();
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isOpen, onClosePicker]);
+
+  const artists = useMemo(() => getPresetArtists(selected).slice(0, 4), [selected]);
+
+  const sortedOptions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const mapped = mixablePresets
+      .map((preset) => {
+        const isSameAsOther = otherSelected ? preset.id === otherSelected.id : false;
+        const shared =
+          otherSelected && !isSameAsOther ? getSharedArtists(preset, otherSelected) : [];
+        const disabledReason = isSameAsOther
+          ? `Already in Style ${slot === 'A' ? 'B' : 'A'}`
+          : shared.length > 0
+          ? `Shares artist: ${shared[0]}`
+          : null;
+        const presetArtists = getPresetArtists(preset);
+        return {
+          preset,
+          presetArtists,
+          disabledReason,
+          isSelected: selected?.id === preset.id,
+        };
+      })
+      .filter(({ preset, presetArtists }) => {
+        if (!q) return true;
+        return (
+          preset.name.toLowerCase().includes(q) ||
+          presetArtists.some((a) => a.toLowerCase().includes(q)) ||
+          preset.prompt.toLowerCase().includes(q)
+        );
+      });
+
+    // Sort compatible first, incompatible last; keep alphabetical within each group
+    mapped.sort((a, b) => {
+      const aDisabled = a.disabledReason ? 1 : 0;
+      const bDisabled = b.disabledReason ? 1 : 0;
+      if (aDisabled !== bDisabled) return aDisabled - bDisabled;
+      return a.preset.name.localeCompare(b.preset.name);
+    });
+
+    return mapped;
+  }, [mixablePresets, otherSelected, query, selected?.id, slot]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative flex-1 min-w-0 rounded-xl border transition-colors bg-zinc-950 ${
+        isLocked
+          ? 'border-amber-500/50 ring-1 ring-amber-500/15'
+          : 'border-zinc-800 hover:border-zinc-700'
+      }`}
+    >
+      {/* Top slot bar: Label + Lock + Roll */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-800/80">
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-[11px] font-semibold uppercase tracking-wider ${
+              slot === 'A' ? 'text-indigo-400' : 'text-purple-400'
+            }`}
+          >
+            Style {slot}
+          </span>
+          {isLocked && (
+            <span className="text-[11px] font-medium text-amber-400">
+              Pinned
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            id={`slot-${slot.toLowerCase()}-lock-btn`}
+            onClick={onToggleLock}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              isLocked
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+            }`}
+            title={
+              isLocked
+                ? `Unlock Style ${slot}`
+                : `Lock Style ${slot} so random rolls only change Style ${slot === 'A' ? 'B' : 'A'}`
+            }
+          >
+            {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+            <span>{isLocked ? 'Locked' : 'Lock'}</span>
+          </button>
+
+          <button
+            type="button"
+            id={`slot-${slot.toLowerCase()}-roll-btn`}
+            onClick={onRollSingle}
+            disabled={!canRollSingle}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title={`Pick another random Style ${slot} compatible with Style ${slot === 'A' ? 'B' : 'A'}`}
+          >
+            <Shuffle className="w-3 h-3" />
+            <span>Roll</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Clickable selected style trigger */}
+      <button
+        type="button"
+        id={`slot-${slot.toLowerCase()}-picker-btn`}
+        onClick={onToggleOpen}
+        className="w-full flex items-center gap-3 p-3 text-left hover:bg-zinc-900/60 transition-colors rounded-b-xl"
+      >
+        <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800 shrink-0">
+          {selected ? (
+            <ImageWithFallback
+              src={selected.image_url}
+              alt={selected.name}
+              name={selected.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-zinc-600 font-mono">
+              {slot}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white truncate">
+            {selected ? selected.name : `Select Style ${slot}`}
+          </p>
+          <p className="text-xs text-zinc-400 truncate mt-0.5">
+            {artists.length > 0 ? artists.join(' · ') : 'Custom prompt preset'}
+          </p>
+        </div>
+
+        <ChevronDown
+          className={`w-4 h-4 text-zinc-500 shrink-0 transition-transform ${
+            isOpen ? 'rotate-180 text-white' : ''
+          }`}
+        />
+      </button>
+
+      {/* Searchable Picker Dropdown */}
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-zinc-950 border border-zinc-700 rounded-xl shadow-2xl shadow-black overflow-hidden">
+          <div className="p-2 border-b border-zinc-800 flex items-center gap-2 bg-black/50">
+            <Search className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-1" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search styles or artists for Style ${slot}...`}
+              className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none py-1"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="p-0.5 text-zinc-500 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-64 overflow-y-auto divide-y divide-zinc-900">
+            {sortedOptions.length === 0 ? (
+              <div className="py-6 text-center text-xs text-zinc-500">
+                No matching styles found.
+              </div>
+            ) : (
+              sortedOptions.map(({ preset, presetArtists, disabledReason, isSelected }) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={Boolean(disabledReason)}
+                  onClick={() => {
+                    onSelect(preset);
+                    onClosePicker();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+                    disabledReason
+                      ? 'opacity-45 cursor-not-allowed bg-zinc-950'
+                      : isSelected
+                      ? 'bg-zinc-900 text-white'
+                      : 'hover:bg-zinc-900/80 text-zinc-200'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800 shrink-0">
+                    <ImageWithFallback
+                      src={preset.image_url}
+                      alt={preset.name}
+                      name={preset.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-white truncate">{preset.name}</p>
+                    <p className="text-[11px] truncate text-zinc-400">
+                      {disabledReason
+                        ? disabledReason
+                        : presetArtists.length > 0
+                        ? presetArtists.slice(0, 3).join(' · ')
+                        : 'Style preset'}
+                    </p>
+                  </div>
+                  {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StyleCombinerModal({
   isOpen,
   onClose,
@@ -68,8 +340,13 @@ export function StyleCombinerModal({
 }: StyleCombinerModalProps) {
   const [styleAId, setStyleAId] = useState<string>('');
   const [styleBId, setStyleBId] = useState<string>('');
+  const [lockedSlot, setLockedSlot] = useState<'A' | 'B' | null>(null);
+  const [openPickerSlot, setOpenPickerSlot] = useState<'A' | 'B' | null>(null);
+  const [pairHistory, setPairHistory] = useState<{ aId: string; bId: string }[]>([]);
+
   const [blendMode, setBlendMode] = useState<BlendMode>('smart');
   const [subject, setSubject] = useState('');
+  const [sampleIndex, setSampleIndex] = useState(0);
   const [weightA, setWeightA] = useState(1.1);
   const [weightB, setWeightB] = useState(0.9);
   const [stepRatio, setStepRatio] = useState(0.5);
@@ -79,594 +356,533 @@ export function StyleCombinerModal({
   const [copiedNegative, setCopiedNegative] = useState(false);
   const [copiedFull, setCopiedFull] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [showNegative, setShowNegative] = useState(false);
 
-  // Filter out any base styles (e.g. 01-Base or names containing Base with numbers in front)
+  // Only valid non-Base, non-Fusion presets can participate in mixing
   const mixablePresets = useMemo(() => filterMixablePresets(presets), [presets]);
 
-  // Initialize or reset selected styles when modal opens
+  // Initialize when modal opens
   useEffect(() => {
     if (!isOpen || mixablePresets.length === 0) return;
 
-    let targetA =
-      (initialStyleA && !isBaseStyleIgnoredForMixing(initialStyleA) && !isAlreadyMixedFusion(initialStyleA) ? initialStyleA : null) ||
-      mixablePresets.find((p) => p.id === styleAId) ||
-      mixablePresets[0];
+    const validInitialA =
+      initialStyleA &&
+      !isBaseStyleIgnoredForMixing(initialStyleA) &&
+      !isAlreadyMixedFusion(initialStyleA)
+        ? initialStyleA
+        : null;
 
-    if (targetA) {
-      setStyleAId(targetA.id);
+    const validInitialB =
+      initialStyleB &&
+      !isBaseStyleIgnoredForMixing(initialStyleB) &&
+      !isAlreadyMixedFusion(initialStyleB)
+        ? initialStyleB
+        : null;
 
-      let targetB =
-        initialStyleB && !isBaseStyleIgnoredForMixing(initialStyleB) && !isAlreadyMixedFusion(initialStyleB) ? initialStyleB : null;
-      if (!targetB || targetB.id === targetA.id || haveCommonArtists(targetA, targetB)) {
-        const compatible = getCompatibleStylesFor(targetA, mixablePresets);
-        targetB = compatible[0] || mixablePresets.find((p) => p.id !== targetA.id) || null;
+    if (!validInitialA && validInitialB) {
+      const compatibleForB = getCompatibleStylesFor(validInitialB, mixablePresets);
+      const partnerA =
+        compatibleForB[0] ||
+        mixablePresets.find((p) => p.id !== validInitialB.id) ||
+        null;
+      if (partnerA) setStyleAId(partnerA.id);
+      setStyleBId(validInitialB.id);
+      setLockedSlot('B');
+    } else {
+      const targetA =
+        validInitialA ||
+        mixablePresets.find((p) => p.id === styleAId) ||
+        mixablePresets[0] ||
+        null;
+
+      if (targetA) {
+        setStyleAId(targetA.id);
+
+        let targetB = validInitialB;
+        if (!targetB || targetB.id === targetA.id || haveCommonArtists(targetA, targetB)) {
+          const compatible = getCompatibleStylesFor(targetA, mixablePresets);
+          targetB = compatible[0] || mixablePresets.find((p) => p.id !== targetA.id) || null;
+        }
+        if (targetB) {
+          setStyleBId(targetB.id);
+        }
       }
-      if (targetB) {
-        setStyleBId(targetB.id);
+
+      if (validInitialA && !validInitialB) {
+        setLockedSlot('A');
+      } else {
+        setLockedSlot(null);
       }
     }
 
+    setPairHistory([]);
+    setOpenPickerSlot(null);
     setSavedSuccess(false);
   }, [isOpen, initialStyleA, initialStyleB, mixablePresets]);
 
-  // Derived current Style A & Style B
   const styleA = useMemo(
-    () =>
-      mixablePresets.find((p) => p.id === styleAId) ||
-      mixablePresets[0] ||
-      null,
+    () => mixablePresets.find((p) => p.id === styleAId) || mixablePresets[0] || null,
     [mixablePresets, styleAId]
   );
 
   const styleB = useMemo(
     () =>
       mixablePresets.find((p) => p.id === styleBId) ||
-      mixablePresets.find((p) => p.id !== styleAId && !haveCommonArtists(styleA, p)) ||
-      mixablePresets.find((p) => p.id !== styleAId) ||
-      mixablePresets[1] ||
+      mixablePresets.find((p) => p.id !== styleA?.id) ||
       null,
-    [mixablePresets, styleBId, styleAId, styleA]
+    [mixablePresets, styleBId, styleA?.id]
   );
 
-  // Base preset exclusion check
-  const isBaseConflict = isBaseStyleIgnoredForMixing(styleA) || isBaseStyleIgnoredForMixing(styleB);
-
-  // Already mixed fusion exclusion check ("dont use already mixed fusions for mixing")
-  const isMixedConflict = isAlreadyMixedFusion(styleA) || isAlreadyMixedFusion(styleB);
-
-  // Common artist analysis between Style A and Style B
   const sharedArtists = useMemo(
-    () => getSharedArtists(styleA, styleB),
+    () => (styleA && styleB ? getSharedArtists(styleA, styleB) : []),
     [styleA, styleB]
   );
-  const hasCommonArtist = sharedArtists.length > 0;
+  const isSameStyle = Boolean(styleA && styleB && styleA.id === styleB.id);
+  const hasConflict = isSameStyle || sharedArtists.length > 0;
 
-  // Auto-generate suggested name when styles change
-  useEffect(() => {
-    if (styleA && styleB) {
-      const cleanAName = styleA.name.replace(/\s+preset|\s+style/gi, '');
-      const cleanBName = styleB.name.replace(/\s+preset|\s+style/gi, '');
-      setCustomPresetName(`${cleanAName} + ${cleanBName} Fusion`);
-    }
+  const combinedPositive = useMemo(() => {
+    if (!styleA || !styleB) return '';
+    return combinePositivePrompts(styleA, styleB, {
+      mode: blendMode,
+      subject,
+      weightA,
+      weightB,
+      stepRatio,
+    });
+  }, [styleA, styleB, blendMode, subject, weightA, weightB, stepRatio]);
+
+  const combinedNegative = useMemo(() => {
+    if (!styleA || !styleB) return '';
+    return mergeNegativePrompts(styleA.negative_prompt, styleB.negative_prompt);
   }, [styleA, styleB]);
 
-  if (!isOpen || !styleA || !styleB) return null;
-
-  // Real-time combined positive & negative outputs
-  const combinedPositivePrompt = combinePositivePrompts(styleA, styleB, {
-    mode: blendMode,
-    subject,
-    weightA,
-    weightB,
-    stepRatio,
-  });
-
-  const combinedNegativePrompt = mergeNegativePrompts(
-    styleA.negative_prompt,
-    styleB.negative_prompt
+  const compatibleCountForA = useMemo(
+    () => (styleA ? getCompatibleStylesFor(styleA, mixablePresets).length : 0),
+    [styleA, mixablePresets]
   );
 
-  // Derived combined metadata
-  const derivedArtists = Array.from(
-    new Set([...(styleA.derivedArtists || []), ...(styleB.derivedArtists || [])])
-  );
-  const derivedTags = Array.from(
-    new Set([...(styleA.derivedTags || []), ...(styleB.derivedTags || [])])
+  const compatibleCountForB = useMemo(
+    () => (styleB ? getCompatibleStylesFor(styleB, mixablePresets).length : 0),
+    [styleB, mixablePresets]
   );
 
-  const totalTokens = combinedPositivePrompt.split(/\s+/).filter(Boolean).length;
+  if (!isOpen) return null;
 
-  // Swap Style A and Style B
+  const pushHistory = () => {
+    if (styleA && styleB) {
+      setPairHistory((prev) => [...prev.slice(-19), { aId: styleA.id, bId: styleB.id }]);
+    }
+  };
+
+  const handleToggleLock = (slot: 'A' | 'B') => {
+    setLockedSlot((prev) => (prev === slot ? null : slot));
+  };
+
   const handleSwapStyles = () => {
-    const tempA = styleAId;
-    setStyleAId(styleBId);
-    setStyleBId(tempA);
+    if (!styleA || !styleB) return;
+    pushHistory();
+    setStyleAId(styleB.id);
+    setStyleBId(styleA.id);
+    setLockedSlot((prev) => (prev === 'A' ? 'B' : prev === 'B' ? 'A' : null));
   };
 
-  // Change Style A with smart auto-switch for Style B if it would create an artist conflict
-  const handleSelectStyleA = (newAId: string) => {
-    setStyleAId(newAId);
-    const newA = mixablePresets.find((p) => p.id === newAId);
-    if (newA && styleB && (newA.id === styleB.id || haveCommonArtists(newA, styleB))) {
-      const compatible = getCompatibleStylesFor(newA, mixablePresets);
-      if (compatible.length > 0) {
-        setStyleBId(compatible[0].id);
-      }
+  const handleRollSingleSlot = (slotToRoll: 'A' | 'B') => {
+    const anchor = slotToRoll === 'A' ? styleB : styleA;
+    const currentId = slotToRoll === 'A' ? styleA?.id : styleB?.id;
+    if (!anchor) return;
+
+    const partner = findRandomCompatiblePartner(anchor, mixablePresets, currentId);
+    if (!partner) return;
+
+    pushHistory();
+    if (slotToRoll === 'A') {
+      setStyleAId(partner.id);
+    } else {
+      setStyleBId(partner.id);
     }
   };
 
-  // Pick a random pair of styles that share NO common artists and are not Base styles
-  const handleRandomPair = () => {
-    if (mixablePresets.length < 2) return;
-    const compatiblePair = findRandomCompatiblePair(mixablePresets);
-    if (compatiblePair) {
-      const [a, b] = compatiblePair;
-      setStyleAId(a.id);
-      setStyleBId(b.id);
+  const handleTryRandom = () => {
+    if (lockedSlot === 'A' && styleA) {
+      handleRollSingleSlot('B');
+      return;
     }
+    if (lockedSlot === 'B' && styleB) {
+      handleRollSingleSlot('A');
+      return;
+    }
+
+    const excludePair: [string, string] | undefined =
+      styleA && styleB ? [styleA.id, styleB.id] : undefined;
+    const pair = findRandomCompatiblePair(mixablePresets, excludePair);
+    if (pair) {
+      pushHistory();
+      setStyleAId(pair[0].id);
+      setStyleBId(pair[1].id);
+    }
+  };
+
+  const handleUndoPair = () => {
+    if (pairHistory.length === 0) return;
+    const last = pairHistory[pairHistory.length - 1];
+    setPairHistory((prev) => prev.slice(0, -1));
+    setStyleAId(last.aId);
+    setStyleBId(last.bId);
+  };
+
+  const handleCycleSampleSubject = () => {
+    const next = SAMPLE_SUBJECTS[sampleIndex % SAMPLE_SUBJECTS.length];
+    setSubject(next);
+    setSampleIndex((prev) => prev + 1);
   };
 
   const handleCopyPositive = () => {
-    onCopyText(combinedPositivePrompt, 'Blended Positive Prompt copied!');
-    onRecordCombination(styleA, styleB, blendMode);
+    if (!combinedPositive || hasConflict) return;
+    onCopyText(combinedPositive, 'Combined Positive Prompt');
+    if (styleA && styleB) {
+      onRecordCombination(styleA, styleB, blendMode);
+    }
     setCopiedPositive(true);
     setTimeout(() => setCopiedPositive(false), 1800);
   };
 
   const handleCopyNegative = () => {
-    onCopyText(combinedNegativePrompt, 'Merged Negative Prompt copied!');
+    if (!combinedNegative || hasConflict) return;
+    onCopyText(combinedNegative, 'Combined Negative Prompt');
     setCopiedNegative(true);
     setTimeout(() => setCopiedNegative(false), 1800);
   };
 
-  const handleCopyFullBlock = () => {
-    const fullText = `Positive:\n${combinedPositivePrompt}\n\nNegative:\n${combinedNegativePrompt}`;
-    onCopyText(fullText, 'Full Blended Prompt Block copied!');
-    onRecordCombination(styleA, styleB, blendMode);
+  const handleCopyFull = () => {
+    if (!combinedPositive || hasConflict) return;
+    const payload = combinedNegative
+      ? `${combinedPositive}\n\nNegative prompt: ${combinedNegative}`
+      : combinedPositive;
+    onCopyText(payload, 'Full Combined Prompt');
+    if (styleA && styleB) {
+      onRecordCombination(styleA, styleB, blendMode);
+    }
     setCopiedFull(true);
     setTimeout(() => setCopiedFull(false), 1800);
   };
 
-  const handleSaveAsPreset = () => {
-    if (hasCommonArtist || isBaseConflict || isMixedConflict) {
-      return;
+  const handleSaveFusion = () => {
+    if (!styleA || !styleB || hasConflict) return;
+    try {
+      const created = createCombinedPreset(styleA, styleB, customPresetName, {
+        mode: blendMode,
+        subject,
+        weightA,
+        weightB,
+        stepRatio,
+      });
+      onSaveCombinedPreset(created);
+      onRecordCombination(styleA, styleB, blendMode);
+      setSavedSuccess(true);
+      setCustomPresetName('');
+      setTimeout(() => setSavedSuccess(false), 2200);
+    } catch (err) {
+      console.error('Failed to save fusion', err);
     }
-    const newPreset = createCombinedPreset(styleA, styleB, customPresetName, {
-      mode: blendMode,
-      weightA,
-      weightB,
-      stepRatio,
-    });
-
-    onSaveCombinedPreset(newPreset);
-    onRecordCombination(styleA, styleB, blendMode);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
   };
+
+  const activeBlendMeta = BLEND_MODES.find((m) => m.id === blendMode) || BLEND_MODES[0];
+
+  const primaryRandomLabel =
+    lockedSlot === 'A'
+      ? 'Try Random Partner for A'
+      : lockedSlot === 'B'
+      ? 'Try Random Partner for B'
+      : 'Try Random Pair';
+
+  const canTryRandom =
+    lockedSlot === 'A'
+      ? compatibleCountForA > 0
+      : lockedSlot === 'B'
+      ? compatibleCountForB > 0
+      : mixablePresets.length >= 2;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md overflow-y-auto"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div
-        className="relative w-full max-w-4xl bg-[#161b22] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden my-6 animate-in fade-in zoom-in-95 flex flex-col max-h-[92vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-[#0f1117] shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 text-indigo-400">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white tracking-tight">
-                  Style Combiner & Fusion Studio
-                </h2>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-900/40 text-indigo-300 border border-indigo-500/30">
-                  Dual-Style Synergy
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">
-                Blend two style blueprints with custom weights, step ratios, and smart token deduplication
-              </p>
-            </div>
+      <div className="w-full max-w-4xl max-h-[92vh] flex flex-col bg-[#09090b] border border-zinc-800 rounded-2xl shadow-2xl shadow-black overflow-hidden">
+        {/* Clean Minimal Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold text-white tracking-tight">
+              Style Combiner
+            </h2>
+            <span className="text-xs text-zinc-500 tabular-nums hidden sm:inline">
+              {mixablePresets.length} mixable styles
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {onOpenGuide && (
               <button
+                type="button"
                 id="combiner-guide-btn"
-                onClick={() => {
-                  onClose();
-                  onOpenGuide();
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-500/30 transition-colors"
-                title="How does combining work? (Guide & algorithms)"
+                onClick={onOpenGuide}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
               >
-                <Info className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">Guide</span>
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Guide</span>
               </button>
             )}
-
             <button
-              id="combiner-random-btn"
-              onClick={handleRandomPair}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-              title="Pick a random style pairing"
-            >
-              <Shuffle className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Surprise Pair</span>
-            </button>
-
-            <button
-              id="close-combiner-modal-btn"
+              type="button"
+              id="close-combiner-btn"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+              aria-label="Close combiner"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Scrollable Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
-          {/* Dual Style Selector Panel */}
-          <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] gap-3 items-center">
-            {/* Style A Card */}
-            <div className="bg-[#0f1117] border border-slate-800 rounded-xl p-3.5 relative overflow-hidden flex flex-col justify-between h-full group hover:border-indigo-500/40 transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-950/70 text-indigo-300 border border-indigo-800/60">
-                  Style Blueprint A
-                </span>
-                {styleA.combineCount !== undefined && (
-                  <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
-                    <Flame className="w-3 h-3 text-amber-400" /> {styleA.combineCount} fusions
-                  </span>
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* Style Pair Selection */}
+          <div className="space-y-2.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <CombinerSlotCard
+                slot="A"
+                selected={styleA}
+                otherSelected={styleB}
+                mixablePresets={mixablePresets}
+                isLocked={lockedSlot === 'A'}
+                isOpen={openPickerSlot === 'A'}
+                onToggleOpen={() =>
+                  setOpenPickerSlot((prev) => (prev === 'A' ? null : 'A'))
+                }
+                onClosePicker={() => setOpenPickerSlot(null)}
+                onSelect={(preset) => {
+                  pushHistory();
+                  setStyleAId(preset.id);
+                }}
+                onToggleLock={() => handleToggleLock('A')}
+                onRollSingle={() => handleRollSingleSlot('A')}
+                canRollSingle={compatibleCountForB > 0}
+              />
+
+              <div className="flex items-center justify-center shrink-0">
+                <button
+                  type="button"
+                  id="swap-styles-btn"
+                  onClick={handleSwapStyles}
+                  disabled={!styleA || !styleB}
+                  className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white transition-colors disabled:opacity-40"
+                  title="Swap Style A and Style B"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <CombinerSlotCard
+                slot="B"
+                selected={styleB}
+                otherSelected={styleA}
+                mixablePresets={mixablePresets}
+                isLocked={lockedSlot === 'B'}
+                isOpen={openPickerSlot === 'B'}
+                onToggleOpen={() =>
+                  setOpenPickerSlot((prev) => (prev === 'B' ? null : 'B'))
+                }
+                onClosePicker={() => setOpenPickerSlot(null)}
+                onSelect={(preset) => {
+                  pushHistory();
+                  setStyleBId(preset.id);
+                }}
+                onToggleLock={() => handleToggleLock('B')}
+                onRollSingle={() => handleRollSingleSlot('B')}
+                canRollSingle={compatibleCountForA > 0}
+              />
+            </div>
+
+            {/* Lock & Roll Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+              <p className="text-xs text-zinc-400 tabular-nums">
+                {lockedSlot === 'A' && styleA ? (
+                  <>
+                    <span className="text-amber-300 font-medium">Style A locked</span>
+                    {' · '}
+                    {compatibleCountForA} compatible partners
+                  </>
+                ) : lockedSlot === 'B' && styleB ? (
+                  <>
+                    <span className="text-amber-300 font-medium">Style B locked</span>
+                    {' · '}
+                    {compatibleCountForB} compatible partners
+                  </>
+                ) : (
+                  'Lock either style to keep it fixed while testing random partners'
                 )}
-              </div>
+              </p>
 
-              {/* Selector dropdown */}
-              <select
-                id="select-style-a"
-                value={styleAId}
-                onChange={(e) => handleSelectStyleA(e.target.value)}
-                aria-label="Select Style Blueprint A"
-                className="w-full px-2.5 py-1.5 bg-[#161b22] border border-slate-700 rounded-lg text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer mb-2.5"
-              >
-                {mixablePresets.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-[#161b22] text-slate-200">
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Visual Preview of Style A */}
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-800 bg-slate-900">
-                  <ImageWithFallback
-                    src={styleA.image_url}
-                    alt={styleA.name}
-                    name={styleA.name}
-                    artists={styleA.derivedArtists}
-                    tags={styleA.derivedTags}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-white truncate">{styleA.name}</p>
-                  <p className="text-[10px] font-mono text-slate-400 line-clamp-2 mt-0.5 leading-tight">
-                    {styleA.prompt}
-                  </p>
-                </div>
-              </div>
-
-              {/* Artist Chips */}
-              {styleA.derivedArtists && styleA.derivedArtists.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap gap-1">
-                  {styleA.derivedArtists.map((artist) => (
-                    <span
-                      key={artist}
-                      className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-500/20 font-medium"
-                    >
-                      by {artist}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Middle Swap Button */}
-            <div className="flex justify-center">
-              <button
-                id="swap-styles-btn"
-                onClick={handleSwapStyles}
-                className="p-2.5 rounded-full bg-[#161b22] hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 border border-slate-700 hover:border-indigo-500 shadow-lg transition-all hover:rotate-180 duration-300"
-                title="Swap Style A and Style B"
-              >
-                <ArrowLeftRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Style B Card */}
-            <div className="bg-[#0f1117] border border-slate-800 rounded-xl p-3.5 relative overflow-hidden flex flex-col justify-between h-full group hover:border-purple-500/40 transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-purple-950/70 text-purple-300 border border-purple-800/60">
-                  Style Blueprint B
-                </span>
-                {styleB.combineCount !== undefined && (
-                  <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
-                    <Flame className="w-3 h-3 text-amber-400" /> {styleB.combineCount} fusions
-                  </span>
+              <div className="flex items-center gap-2">
+                {pairHistory.length > 0 && (
+                  <button
+                    type="button"
+                    id="combiner-undo-btn"
+                    onClick={handleUndoPair}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                    <span>Previous</span>
+                  </button>
                 )}
+
+                <button
+                  type="button"
+                  id="combiner-random-btn"
+                  onClick={handleTryRandom}
+                  disabled={!canTryRandom}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-100 hover:bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Shuffle className="w-3.5 h-3.5" />
+                  <span>{primaryRandomLabel}</span>
+                </button>
               </div>
-
-              {/* Selector dropdown */}
-              <select
-                id="select-style-b"
-                value={styleBId}
-                onChange={(e) => setStyleBId(e.target.value)}
-                aria-label="Select Style Blueprint B"
-                className="w-full px-2.5 py-1.5 bg-[#161b22] border border-slate-700 rounded-lg text-xs font-semibold text-slate-200 focus:outline-none focus:border-purple-500 cursor-pointer mb-2.5"
-              >
-                {mixablePresets.map((p) => {
-                  const isSame = p.id === styleA.id;
-                  const conflicts = !isSame && haveCommonArtists(styleA, p);
-                  const conflictArtists = conflicts ? getSharedArtists(styleA, p) : [];
-                  return (
-                    <option
-                      key={p.id}
-                      value={p.id}
-                      disabled={isSame || conflicts}
-                      className={
-                        conflicts || isSame
-                          ? 'text-zinc-500 bg-zinc-900'
-                          : 'bg-[#161b22] text-slate-200'
-                      }
-                    >
-                      {p.name}
-                      {isSame
-                        ? ' (Current Style A)'
-                        : conflicts
-                        ? ` — Incompatible (Shares: ${conflictArtists.join(', ')})`
-                        : ''}
-                    </option>
-                  );
-                })}
-              </select>
-
-              {/* Visual Preview of Style B */}
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-800 bg-slate-900">
-                  <ImageWithFallback
-                    src={styleB.image_url}
-                    alt={styleB.name}
-                    name={styleB.name}
-                    artists={styleB.derivedArtists}
-                    tags={styleB.derivedTags}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-white truncate">{styleB.name}</p>
-                  <p className="text-[10px] font-mono text-slate-400 line-clamp-2 mt-0.5 leading-tight">
-                    {styleB.prompt}
-                  </p>
-                </div>
-              </div>
-
-              {/* Artist Chips */}
-              {styleB.derivedArtists && styleB.derivedArtists.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap gap-1">
-                  {styleB.derivedArtists.map((artist) => (
-                    <span
-                      key={artist}
-                      className="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-500/20 font-medium"
-                    >
-                      by {artist}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
+
+            {/* Inline Artist / Same-Style Conflict Banner (only when needed) */}
+            {hasConflict && (
+              <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-rose-950/30 border border-rose-500/40 text-xs text-rose-200">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="truncate">
+                    {isSameStyle
+                      ? 'Style A and Style B cannot be the same preset.'
+                      : `Shared artist detected (${sharedArtists.join(', ')}). Pick a different partner.`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTryRandom}
+                  className="shrink-0 px-2.5 py-1 rounded-md bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-medium transition-colors"
+                >
+                  Find Compatible
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Base Preset Conflict Alert Banner */}
-          {isBaseConflict && (
-            <div
-              id="combiner-base-conflict-alert"
-              className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-950/60 border border-amber-500/60 text-amber-200 animate-in fade-in shadow-lg"
-            >
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-bold text-amber-200 flex items-center gap-2">
-                  <span>Cannot Mix: Base Preset Excluded</span>
-                </p>
-                <p className="text-amber-300/80 leading-relaxed">
-                  Presets containing &ldquo;Base&rdquo; with leading numbers (such as &ldquo;01-Base&rdquo;) are excluded from mixing. Please select a standard style blueprint.
-                </p>
+          {/* Compact Blend Settings + Subject */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pt-4 border-t border-zinc-800/80">
+            {/* Blend Mode Segmented Control */}
+            <div className="md:col-span-6 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-zinc-300">Blend Mode</label>
+                <span className="text-[11px] text-zinc-500 truncate ml-2">
+                  {activeBlendMeta.hint}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 p-1 rounded-lg bg-zinc-950 border border-zinc-800">
+                {BLEND_MODES.map((mode) => {
+                  const active = blendMode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setBlendMode(mode.id)}
+                      className={`py-1.5 px-2 rounded-md text-xs font-medium transition-colors truncate ${
+                        active
+                          ? 'bg-zinc-800 text-white shadow-sm'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          )}
 
-          {/* Mixed Fusion Conflict Alert Banner */}
-          {isMixedConflict && (
-            <div
-              id="combiner-mixed-fusion-conflict-alert"
-              className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-950/60 border border-amber-500/60 text-amber-200 animate-in fade-in shadow-lg"
-            >
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-bold text-amber-200 flex items-center gap-2">
-                  <span>Cannot Mix: Already Mixed Fusion Excluded</span>
-                </p>
-                <p className="text-amber-300/80 leading-relaxed">
-                  Already mixed fusions cannot be used for mixing. Please select original, unblended style blueprints.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Common Artist Conflict Alert Banner */}
-          {hasCommonArtist && (
-            <div
-              id="combiner-common-artist-alert"
-              className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-200 animate-in fade-in shadow-lg"
-            >
-              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-bold text-rose-200 flex items-center gap-2">
-                  <span>Cannot Mix: Common Artist Detected</span>
-                  <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-rose-900 text-rose-200 border border-rose-700">
-                    {sharedArtists.join(', ')}
-                  </span>
-                </p>
-                <p className="text-rose-300/80 leading-relaxed">
-                  Style A and Style B must not have any common artist. Please select a different Style B or Style A that does not feature {sharedArtists.join(', ')}.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Fusion Strategy / Blend Mode Selector */}
-          <div className="bg-[#0f1117] border border-slate-800 rounded-xl p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                Combination Mode & Syntax
+            {/* Subject Input with inline Sample Cycler */}
+            <div className="md:col-span-6 space-y-2">
+              <label htmlFor="combiner-subject-input" className="block text-xs font-medium text-zinc-300">
+                Subject <span className="text-zinc-500 font-normal">(optional)</span>
               </label>
-              <span className="text-[10px] text-slate-500">
-                SD / WebUI / ComfyUI Syntax Ready
-              </span>
+              <div className="relative flex items-center">
+                <input
+                  id="combiner-subject-input"
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Leave blank for pure style blend..."
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-600 rounded-lg pl-3 pr-16 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                />
+                <div className="absolute right-1.5 flex items-center gap-0.5">
+                  {subject && (
+                    <button
+                      type="button"
+                      onClick={() => setSubject('')}
+                      className="p-1 rounded text-zinc-500 hover:text-white"
+                      title="Clear subject"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    id="combiner-sample-subject-btn"
+                    onClick={handleCycleSampleSubject}
+                    className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    title="Try a sample subject"
+                  >
+                    <Dices className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Mode Tabs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
-                id="blend-mode-smart"
-                type="button"
-                onClick={() => setBlendMode('smart')}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  blendMode === 'smart'
-                    ? 'bg-indigo-950/50 border-indigo-500 text-white shadow-sm'
-                    : 'bg-[#161b22] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-indigo-300">Smart Fusion</span>
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                </div>
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  Deduplicates tokens & merges aesthetic tags
-                </p>
-              </button>
-
-              <button
-                id="blend-mode-weighted"
-                type="button"
-                onClick={() => setBlendMode('weighted')}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  blendMode === 'weighted'
-                    ? 'bg-indigo-950/50 border-indigo-500 text-white shadow-sm'
-                    : 'bg-[#161b22] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-indigo-300">Weighted Ratio</span>
-                  <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                </div>
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  SD syntax: (Style A: 1.2), (Style B: 0.8)
-                </p>
-              </button>
-
-              <button
-                id="blend-mode-alternating"
-                type="button"
-                onClick={() => setBlendMode('alternating')}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  blendMode === 'alternating'
-                    ? 'bg-indigo-950/50 border-indigo-500 text-white shadow-sm'
-                    : 'bg-[#161b22] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-indigo-300">Step Matrix</span>
-                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                </div>
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  Comfy / A1111: [Style A : Style B : 0.5]
-                </p>
-              </button>
-
-              <button
-                id="blend-mode-sequential"
-                type="button"
-                onClick={() => setBlendMode('sequential')}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  blendMode === 'sequential'
-                    ? 'bg-indigo-950/50 border-indigo-500 text-white shadow-sm'
-                    : 'bg-[#161b22] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-indigo-300">Sequential</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
-                </div>
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  Direct clean sequence: Style A, Style B
-                </p>
-              </button>
-            </div>
-
-            {/* Secondary Controls for Weighted & Alternating modes */}
+            {/* Conditional Mode Sliders */}
             {blendMode === 'weighted' && (
-              <div className="pt-2 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-400 font-medium">Style A Weight:</span>
-                    <span className="font-mono text-indigo-400 font-bold">{weightA.toFixed(2)}x</span>
+              <div className="md:col-span-12 grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 rounded-xl bg-zinc-950 border border-zinc-800/80">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-400">Style A Weight</span>
+                    <span className="font-mono text-white tabular-nums">{weightA.toFixed(2)}</span>
                   </div>
                   <input
                     type="range"
-                    min="0.3"
+                    min="0.2"
                     max="1.8"
                     step="0.05"
                     value={weightA}
                     onChange={(e) => setWeightA(parseFloat(e.target.value))}
-                    aria-label="Style A Weight slider"
-                    className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                    className="w-full accent-indigo-500 cursor-pointer"
                   />
                 </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-400 font-medium">Style B Weight:</span>
-                    <span className="font-mono text-purple-400 font-bold">{weightB.toFixed(2)}x</span>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-400">Style B Weight</span>
+                    <span className="font-mono text-white tabular-nums">{weightB.toFixed(2)}</span>
                   </div>
                   <input
                     type="range"
-                    min="0.3"
+                    min="0.2"
                     max="1.8"
                     step="0.05"
                     value={weightB}
                     onChange={(e) => setWeightB(parseFloat(e.target.value))}
-                    aria-label="Style B Weight slider"
-                    className="w-full accent-purple-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                    className="w-full accent-purple-500 cursor-pointer"
                   />
                 </div>
               </div>
             )}
 
             {blendMode === 'alternating' && (
-              <div className="pt-2 border-t border-slate-800/80 animate-in fade-in">
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-slate-400 font-medium">
-                    Step Transition Switch Ratio (Style A ➔ Style B):
-                  </span>
-                  <span className="font-mono text-indigo-400 font-bold">
-                    {Math.round(stepRatio * 100)}% steps
+              <div className="md:col-span-12 p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-zinc-400">Step Transition Point</span>
+                  <span className="font-mono text-white tabular-nums">
+                    {Math.round(stepRatio * 100)}% Style A → Style B
                   </span>
                 </div>
                 <input
@@ -676,262 +892,138 @@ export function StyleCombinerModal({
                   step="0.05"
                   value={stepRatio}
                   onChange={(e) => setStepRatio(parseFloat(e.target.value))}
-                  aria-label="Step Transition Switch Ratio slider"
-                  className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                  className="w-full accent-indigo-500 cursor-pointer"
                 />
               </div>
             )}
           </div>
 
-          {/* Custom Subject Input */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-amber-400" />
-                Custom Subject / Focal Object (Optional)
-              </label>
-              {subject ? (
+          {/* Combined Prompt Output */}
+          <div className="space-y-3 pt-4 border-t border-zinc-800/80">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-300">Combined Prompt</span>
+              <div className="flex items-center gap-2">
+                {combinedNegative && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNegative((prev) => !prev)}
+                    className="text-xs text-zinc-400 hover:text-white transition-colors"
+                  >
+                    {showNegative ? 'Hide negative' : 'Show negative'}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setSubject('')}
-                  className="text-[10px] text-rose-400 hover:text-rose-300 transition-colors"
-                >
-                  Clear Subject (Pure Style)
-                </button>
-              ) : (
-                <span className="text-[10px] text-slate-500">Pure style blend active</span>
-              )}
-            </div>
-            <input
-              id="combiner-subject-input"
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Leave empty for pure style prompt, or type a subject (e.g. samurai warrior, landscape)..."
-              className="w-full px-3 py-2 bg-[#0f1117] border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-medium"
-            />
-
-            {/* Quick Sample Pills */}
-            <div className="mt-2 flex flex-wrap items-center gap-1">
-              <span className="text-[10px] text-slate-500 mr-1">Quick Subjects:</span>
-              {SAMPLE_SUBJECTS.map((s, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setSubject(s)}
-                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors truncate max-w-[220px]"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Generated Result Output Block */}
-          <div className="space-y-3 pt-2 border-t border-slate-800">
-            {/* Positive Prompt */}
-            <div className="bg-[#0f1117] rounded-xl p-3.5 border border-slate-800">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Combined Positive Prompt
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-500 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700">
-                    {totalTokens} tokens
-                  </span>
-                </div>
-
-                <button
-                  id="combiner-copy-positive-btn"
+                  id="copy-combined-positive-btn"
                   onClick={handleCopyPositive}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                    copiedPositive
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                  }`}
+                  disabled={!combinedPositive || hasConflict}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 disabled:opacity-40 transition-colors"
                 >
                   {copiedPositive ? (
                     <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span>Copied!</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Copied</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3 h-3 text-indigo-400" />
-                      <span>Copy Positive</span>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Prompt</span>
                     </>
                   )}
                 </button>
               </div>
+            </div>
 
-              <p className="text-xs font-mono text-slate-200 leading-relaxed break-words max-h-36 overflow-y-auto selection:bg-indigo-500/30">
-                {combinedPositivePrompt}
-              </p>
-
-              {/* Derived Artists & Aesthetic Badges Preview */}
-              {(derivedArtists.length > 0 || derivedTags.length > 0) && (
-                <div className="mt-3 pt-2.5 border-t border-slate-800 flex flex-wrap items-center gap-1.5 text-xs">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 mr-1 flex items-center gap-1">
-                    Inherited:
-                  </span>
-                  {derivedArtists.map((artist) => (
-                    <span
-                      key={artist}
-                      className="inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-500/30"
-                    >
-                      <Users className="w-2.5 h-2.5" />
-                      by {artist}
-                    </span>
-                  ))}
-                  {derivedTags.slice(0, 4).map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
+            <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-xs text-zinc-200 leading-relaxed select-all min-h-[4.5rem]">
+              {combinedPositive || (
+                <span className="text-zinc-500">Select two compatible styles to generate a combined prompt.</span>
               )}
             </div>
 
-            {/* Merged Negative Prompt */}
-            {combinedNegativePrompt && (
-              <div className="bg-[#0f1117] rounded-xl p-3 border border-slate-800">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1">
-                      <Ban className="w-3 h-3" />
-                      Deduplicated Negative Prompt
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-mono">
-                      (merged from both styles)
-                    </span>
-                  </div>
-
+            {showNegative && combinedNegative && (
+              <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-zinc-400">
+                    Merged Negative Prompt
+                  </span>
                   <button
-                    id="combiner-copy-negative-btn"
+                    type="button"
                     onClick={handleCopyNegative}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
-                      copiedNegative
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                    }`}
+                    className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white transition-colors"
                   >
                     {copiedNegative ? (
-                      <Check className="w-3 h-3 text-emerald-400" />
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span>Copied</span>
+                      </>
                     ) : (
-                      <Copy className="w-3 h-3 text-rose-400" />
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy</span>
+                      </>
                     )}
-                    <span>Copy</span>
                   </button>
                 </div>
-
-                <p className="text-xs font-mono text-slate-400 leading-relaxed break-words max-h-24 overflow-y-auto selection:bg-rose-500/30">
-                  {combinedNegativePrompt}
+                <p className="font-mono text-[11px] text-zinc-400 leading-relaxed select-all">
+                  {combinedNegative}
                 </p>
               </div>
             )}
           </div>
-
-          {/* Preset Saving Section */}
-          <div className="bg-slate-900/60 border border-slate-800 p-3.5 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="flex-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Save as Library Style Preset
-              </label>
-              <input
-                type="text"
-                value={customPresetName}
-                onChange={(e) => setCustomPresetName(e.target.value)}
-                placeholder="Name for this new combined preset..."
-                className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-slate-700 rounded-lg text-xs text-slate-200 font-medium focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div className="shrink-0 flex items-end">
-              <button
-                id="save-combined-preset-btn"
-                type="button"
-                onClick={handleSaveAsPreset}
-                disabled={hasCommonArtist || isBaseConflict || isMixedConflict || !customPresetName.trim() || savedSuccess}
-                title={
-                  isBaseConflict
-                    ? 'Cannot save: Base styles with leading numbers are excluded from mixing'
-                    : isMixedConflict
-                    ? 'Cannot save: Already mixed fusions cannot be used for mixing'
-                    : hasCommonArtist
-                    ? `Cannot save: Styles share artist (${sharedArtists.join(', ')})`
-                    : !customPresetName.trim()
-                    ? 'Enter a preset name'
-                    : 'Save blended preset to library'
-                }
-                className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
-                  savedSuccess
-                    ? 'bg-emerald-600 text-white shadow-emerald-950/50'
-                    : isBaseConflict || isMixedConflict || hasCommonArtist
-                    ? 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed opacity-60'
-                    : 'bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40'
-                }`}
-              >
-                {savedSuccess ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Saved to Styles!</span>
-                  </>
-                ) : isBaseConflict ? (
-                  <>
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Cannot Mix (Base Style)</span>
-                  </>
-                ) : isMixedConflict ? (
-                  <>
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Cannot Mix (Already Mixed)</span>
-                  </>
-                ) : hasCommonArtist ? (
-                  <>
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Cannot Mix (Shared Artist)</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save to Library</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* Modal Footer Actions */}
-        <div className="px-5 py-3.5 border-t border-slate-800 bg-[#0f1117] flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
-          <p className="text-[11px] text-slate-500 font-mono">
-            Synergy logged to leaderboards &bull; Compatible with styles.csv
-          </p>
+        {/* Clean Footer Action Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-5 py-3.5 border-t border-zinc-800 bg-black/40 shrink-0">
+          <input
+            id="fusion-custom-name-input"
+            type="text"
+            value={customPresetName}
+            onChange={(e) => setCustomPresetName(e.target.value)}
+            placeholder={
+              styleA && styleB
+                ? `${styleA.name} + ${styleB.name} Fusion`
+                : 'Custom fusion name (optional)...'
+            }
+            className="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 focus:border-zinc-600 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
+          />
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              id="combiner-copy-full-btn"
-              onClick={handleCopyFullBlock}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                copiedFull
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
-              }`}
+              id="copy-full-combined-btn"
+              onClick={handleCopyFull}
+              disabled={!combinedPositive || hasConflict}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 disabled:opacity-40 transition-colors"
             >
               {copiedFull ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Copied Full Block!</span>
+                  <span>Copied Full</span>
                 </>
               ) : (
                 <>
                   <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Pos + Neg Block</span>
+                  <span>Copy Full</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              id="save-fusion-btn"
+              onClick={handleSaveFusion}
+              disabled={!styleA || !styleB || hasConflict}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {savedSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Saved to Fusions</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Fusion</span>
                 </>
               )}
             </button>

@@ -380,21 +380,61 @@ export function getCompatibleStylesFor(target: StylePreset, presets: StylePreset
 }
 
 /**
- * Finds a random compatible pair from a list of presets where style A and style B have NO common artists
- * and neither is an ignored Base style.
+ * Finds a random compatible pair from a list of presets where style A and style B have NO common artists,
+ * neither is an ignored Base style, and neither is an already mixed fusion.
  */
-export function findRandomCompatiblePair(presets: StylePreset[]): [StylePreset, StylePreset] | null {
+export function findRandomCompatiblePair(
+  presets: StylePreset[],
+  excludePairIds?: [string, string]
+): [StylePreset, StylePreset] | null {
   const mixable = filterMixablePresets(presets);
   if (mixable.length < 2) return null;
   const shuffledA = [...mixable].sort(() => Math.random() - 0.5);
+  let fallbackPair: [StylePreset, StylePreset] | null = null;
+
   for (const a of shuffledA) {
     const compatible = mixable.filter((b) => b.id !== a.id && !haveCommonArtists(a, b));
     if (compatible.length > 0) {
-      const randomB = compatible[Math.floor(Math.random() * compatible.length)];
-      return [a, randomB];
+      if (excludePairIds) {
+        const fresh = compatible.filter(
+          (b) =>
+            !(
+              (a.id === excludePairIds[0] && b.id === excludePairIds[1]) ||
+              (a.id === excludePairIds[1] && b.id === excludePairIds[0])
+            )
+        );
+        if (fresh.length > 0) {
+          const randomB = fresh[Math.floor(Math.random() * fresh.length)];
+          return [a, randomB];
+        }
+        if (!fallbackPair) {
+          fallbackPair = [a, compatible[Math.floor(Math.random() * compatible.length)]];
+        }
+      } else {
+        const randomB = compatible[Math.floor(Math.random() * compatible.length)];
+        return [a, randomB];
+      }
     }
   }
-  return null;
+  return fallbackPair;
+}
+
+/**
+ * Finds a random compatible partner for a locked style, avoiding common artists,
+ * base styles, already mixed fusions, and the current partner ID when alternatives exist.
+ */
+export function findRandomCompatiblePartner(
+  lockedStyle: StylePreset,
+  presets: StylePreset[],
+  currentPartnerId?: string | null
+): StylePreset | null {
+  const compatible = getCompatibleStylesFor(lockedStyle, presets);
+  if (compatible.length === 0) return null;
+  const freshCandidates = currentPartnerId
+    ? compatible.filter((p) => p.id !== currentPartnerId)
+    : compatible;
+  const pool = freshCandidates.length > 0 ? freshCandidates : compatible;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 export interface CombineOptions {

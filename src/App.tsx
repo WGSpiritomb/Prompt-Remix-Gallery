@@ -251,30 +251,31 @@ export default function App() {
       return;
     }
 
-    let initialA =
-      (styleA && !isBaseStyleIgnoredForMixing(styleA) && !isAlreadyMixedFusion(styleA) ? styleA : null) ||
-      (fusionSlotA && !isBaseStyleIgnoredForMixing(fusionSlotA) && !isAlreadyMixedFusion(fusionSlotA) ? fusionSlotA : null) ||
-      mixablePresets[0] ||
-      null;
+    const requestedA =
+      styleA && !isBaseStyleIgnoredForMixing(styleA) && !isAlreadyMixedFusion(styleA)
+        ? styleA
+        : !styleB && fusionSlotA && !isBaseStyleIgnoredForMixing(fusionSlotA) && !isAlreadyMixedFusion(fusionSlotA)
+        ? fusionSlotA
+        : null;
 
     let initialB =
       styleB && !isBaseStyleIgnoredForMixing(styleB) && !isAlreadyMixedFusion(styleB)
         ? styleB
-        : fusionSlotB && !isBaseStyleIgnoredForMixing(fusionSlotB) && !isAlreadyMixedFusion(fusionSlotB)
+        : !styleA && fusionSlotB && !isBaseStyleIgnoredForMixing(fusionSlotB) && !isAlreadyMixedFusion(fusionSlotB)
         ? fusionSlotB
         : null;
 
-    if (initialA) {
+    const initialA = requestedA || (!initialB ? mixablePresets[0] || null : null);
+
+    if (initialA && initialB) {
       // Ensure initialB has no common artist with initialA and is not a base style or already mixed fusion
       if (
-        !initialB ||
         initialB.id === initialA.id ||
         haveCommonArtists(initialA, initialB) ||
         isBaseStyleIgnoredForMixing(initialB) ||
         isAlreadyMixedFusion(initialB)
       ) {
-        const compatibleList = getCompatibleStylesFor(initialA, mixablePresets);
-        initialB = compatibleList[0] || mixablePresets.find((p) => p.id !== initialA?.id) || null;
+        initialB = null;
       }
     }
 
