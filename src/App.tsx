@@ -918,6 +918,7 @@ export default function App() {
               <LeaderboardPanel
                 presets={presets}
                 combinations={combinations}
+                activeTab={activeTab}
                 selectedArtist={selectedArtist}
                 selectedTag={selectedTag}
                 onSelectArtist={(artist) => setSelectedArtist(artist)}

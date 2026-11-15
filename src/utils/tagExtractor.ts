@@ -363,8 +363,29 @@ export function enrichPreset(preset: StylePreset): StylePreset {
   };
 }
 
+function isFusionForLeaderboard(preset: StylePreset): boolean {
+  if (!preset) return false;
+  // 3-artist mixes are NOT fusions and MUST count toward artist leaderboard
+  const isTrio =
+    preset.derivedTags?.includes('3-artist mix') ||
+    preset.derivedTags?.includes('trio') ||
+    (Array.isArray(preset.derivedArtists) &&
+      preset.derivedArtists.length === 3 &&
+      !preset.parentStyleIds) ||
+    /\b(?:trio mix|3-artist mix)\b/i.test(preset.name);
+  if (isTrio) return false;
+
+  if (preset.isFusion === true || preset.isCombined === true) return true;
+  if (Array.isArray(preset.parentStyleIds) && preset.parentStyleIds.length === 2) return true;
+  if (Array.isArray(preset.parentStyleNames) && preset.parentStyleNames.length === 2) return true;
+  if (typeof preset.id === 'string' && preset.id.startsWith('fusion_')) return true;
+  if (/\s+\+\s+.*(?:fusion|blend)/i.test(preset.name)) return true;
+  return false;
+}
+
 /**
- * Calculates leaderboard rankings for artists and tags across the entire preset dataset
+ * Calculates leaderboard rankings for artists and tags across non-fusion style presets.
+ * Artists inside fusions do not count toward the artist leaderboard.
  */
 export function computeLeaderboards(presets: StylePreset[]): {
   topArtists: ExtractedTag[];
@@ -386,6 +407,11 @@ export function computeLeaderboards(presets: StylePreset[]): {
   let totalTokens = 0;
 
   for (const preset of presets) {
+    // Exclude fusions from artist & style leaderboard counting
+    if (isFusionForLeaderboard(preset)) {
+      continue;
+    }
+
     const artists = preset.derivedArtists || extractArtists(`${preset.name} ${preset.prompt}`);
     const tags = preset.derivedTags || extractAestheticTags(`${preset.name} ${preset.prompt}`);
 
